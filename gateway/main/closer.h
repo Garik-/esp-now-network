@@ -29,6 +29,8 @@ typedef esp_err_t (*closer_fn_t)(void);
  */
 typedef struct closer_t *closer_handle_t;
 
+typedef esp_err_t (*with_closer_fn_t)(closer_handle_t);
+
 /**
  * @brief Creates a new closer object.
  *
@@ -69,33 +71,16 @@ esp_err_t closer_add(closer_handle_t h, closer_fn_t fn, const char *what);
  */
 void closer_close(closer_handle_t h);
 
-/**
- * @brief Macro to register a cleanup function without checking errors.
- *
- * @param h Handle to the closer.
- * @param fn Cleanup function.
- */
-#define CLOSER_DEFER(h, fn)                                                                                            \
-    do {                                                                                                               \
-        closer_fn_t _fn = (fn);                                                                                        \
-        closer_add((h), _fn);                                                                                          \
-    } while (0)
+esp_err_t with_closer(with_closer_fn_t fn);
 
-/**
- * @brief Macro to register a cleanup function safely.
- *
- * If adding the function fails, the macro logs the error and optionally handles it.
- *
- * @param h Handle to the closer.
- * @param fn Cleanup function.
- * @param on_error Optional: expression to execute if closer_add fails.
- */
-#define CLOSER_DEFER_SAFE(h, fn, on_error)                                                                             \
+#define DEFER(call, closer, cleanup_fn)                                                                                \
     do {                                                                                                               \
-        esp_err_t _err = closer_add((h), (fn));                                                                        \
-        if (unlikely(_err != ESP_OK)) {                                                                                \
-            on_error;                                                                                                  \
+        esp_err_t err_rc_ = (call);                                                                                    \
+        if (err_rc_ != ESP_OK) {                                                                                       \
+            ESP_LOGE(TAG, "%s failed: %s", #call, esp_err_to_name(err_rc_));                                           \
+            return err_rc_;                                                                                            \
         }                                                                                                              \
+        closer_add((closer), (cleanup_fn), #cleanup_fn);                                                               \
     } while (0)
 
 #ifdef CLOSER_IMPLEMENTATION
@@ -173,6 +158,24 @@ void closer_close(closer_handle_t h) {
     }
 
     h->top = NULL;
+}
+
+esp_err_t with_closer(with_closer_fn_t fn) {
+    esp_err_t err;
+    closer_handle_t closer = NULL;
+
+    err = closer_create(&closer);
+    if (unlikely(err != ESP_OK))
+        return err;
+
+    err = fn(closer);
+    if (err != ESP_OK) {
+        closer_close(closer);
+    }
+
+    closer_destroy(closer);
+
+    return err;
 }
 
 #endif /* CLOSER_IMPLEMENTATION */

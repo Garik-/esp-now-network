@@ -5,7 +5,7 @@
 
 #define DATA_BUFFER_SIZE ESP_NOW_MAX_DATA_LEN
 
-static const char *TAG = "esp_now_receiver";
+static const char *TAG = "esp_now_gateway";
 
 typedef struct {
     uint8_t mac_addr[ESP_NOW_ETH_ALEN];
@@ -30,7 +30,7 @@ static uint8_t *get_static_buffer(int len) {
     return data_buffer_pool[current_index];
 }
 
-esp_err_t espnow_deinit() {
+static esp_err_t espnow_deinit() {
     vQueueDelete(s_event_queue);
     s_event_queue = NULL;
     return esp_now_deinit();
@@ -77,14 +77,11 @@ static void espnow_task(void *pvParameter) {
         }
 
         ESP_LOGI(TAG, "receive data from " MACSTR ", len: %d", MAC2STR(recv_cb.mac_addr),
-                 recv_cb.data_len); // TODO: set LOGD
-        // if (recv_cb.data) {
-        //     data_parse(recv_cb.data, recv_cb.data_len);
-        // }
+                 recv_cb.data_len); // TODO: delete
     }
 }
 
-esp_err_t espnow_init(uint8_t channel, wifi_interface_t ifidx) {
+static esp_err_t espnow_init() {
     s_event_queue = xQueueCreate(QUEUE_SIZE, sizeof(event_recv_cb_t));
     if (unlikely(s_event_queue == NULL)) {
         ESP_LOGE(TAG, "create queue fail");
@@ -96,15 +93,21 @@ esp_err_t espnow_init(uint8_t channel, wifi_interface_t ifidx) {
     ESP_RETURN_ON_ERROR(esp_now_register_recv_cb(espnow_recv_cb), TAG, "esp_now_register_recv_cb");
 
     esp_now_peer_info_t peer = {
-        .channel = channel,
-        .ifidx = ifidx,
+        .channel = GATEWAY_WIFI_CHANEL,
+        .ifidx = GATEWAY_WIFI_IF,
         .encrypt = false,
     };
     memcpy(peer.peer_addr, s_peer_mac, ESP_NOW_ETH_ALEN);
 
     ESP_RETURN_ON_ERROR(esp_now_add_peer(&peer), TAG, "esp_now_add_peer");
 
-    xTaskCreate(espnow_task, "espnow_task", 2048, NULL, 4, NULL);
+    xTaskCreate(espnow_task, "espnow_task", 1024 * 2, NULL, 4, NULL); // TODO: adjust stack size
+
+    return ESP_OK;
+}
+
+esp_err_t espnow_start(closer_handle_t closer) {
+    DEFER(espnow_init(), closer, espnow_deinit);
 
     return ESP_OK;
 }

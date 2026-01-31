@@ -9,5 +9,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
 
-esp_err_t espnow_init(uint8_t channel, wifi_interface_t ifidx);
-esp_err_t espnow_deinit();
+#include "closer.h"
+#include "config.h"
+
+esp_err_t espnow_start(closer_handle_t closer);
