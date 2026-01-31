@@ -25,6 +25,7 @@ esp_err_t app_run() {
     ESP_RETURN_ON_ERROR(nvs_init(), TAG, "nvs_init");
     ESP_RETURN_ON_ERROR(with_closer(wifi_start), TAG, "wifi_start");
     ESP_RETURN_ON_ERROR(with_closer(espnow_start), TAG, "espnow_start");
+    ESP_RETURN_ON_ERROR(wifi_connect(), TAG, "wifi_connect");
 
     return ESP_OK;
 }
