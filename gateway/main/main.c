@@ -11,7 +11,9 @@
 #define GATEWAY_WIFI_IF ESP_IF_WIFI_AP
 #define GATEWAY_WIFI_CHANEL CONFIG_ESPNOW_CHANNEL
 
-static const char *TAG = "gateway";
+#include "espnow.h"
+
+static const char *TAG = "main_gateway";
 
 static esp_netif_t *s_sta_netif;
 
@@ -107,9 +109,16 @@ static esp_err_t wifi_start(closer_handle_t closer) {
     return ESP_OK;
 }
 
+static esp_err_t espnow_start(closer_handle_t closer) {
+    DEFER(espnow_init(GATEWAY_WIFI_CHANEL, GATEWAY_WIFI_IF), closer, espnow_deinit);
+
+    return ESP_OK;
+}
+
 esp_err_t app_run() {
     ESP_RETURN_ON_ERROR(nvs_init(), TAG, "nvs_init");
     ESP_RETURN_ON_ERROR(with_closer(wifi_start), TAG, "wifi_start");
+    ESP_RETURN_ON_ERROR(with_closer(espnow_start), TAG, "espnow_start");
 
     return ESP_OK;
 }
