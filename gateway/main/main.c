@@ -1,0 +1,113 @@
+#include "esp_check.h"
+#include "esp_err.h"
+#include "esp_log.h"
+#include "esp_netif.h"
+#include "esp_now.h"
+#include "esp_wifi.h"
+
+#include "nvs_flash.h"
+
+#define GATEWAY_WIFI_MODE WIFI_MODE_APSTA
+#define GATEWAY_WIFI_IF ESP_IF_WIFI_AP
+#define GATEWAY_WIFI_CHANEL CONFIG_ESPNOW_CHANNEL
+
+static const char *TAG = "gateway";
+
+static esp_netif_t *s_sta_netif;
+
+#define CLOSER_IMPLEMENTATION
+#include "closer.h"
+
+typedef esp_err_t (*define_fn_t)(closer_handle_t);
+esp_err_t with_closer(define_fn_t fn) {
+    esp_err_t err;
+    closer_handle_t closer = NULL;
+
+    err = closer_create(&closer);
+    if (unlikely(err != ESP_OK))
+        return err;
+
+    err = fn(closer);
+    if (err != ESP_OK) {
+        closer_close(closer);
+    }
+
+    closer_destroy(closer);
+
+    return err;
+}
+
+__attribute__((cold)) static esp_err_t nvs_init() {
+    esp_err_t ret = nvs_flash_init();
+    if (unlikely(ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND)) {
+        ESP_RETURN_ON_ERROR(nvs_flash_erase(), TAG, "nvs_flash_erase");
+        ret = nvs_flash_init();
+    }
+
+    return ret;
+}
+
+static esp_err_t delete_default_wifi_driver_and_handlers() {
+    if (unlikely(s_sta_netif == NULL)) {
+        return ESP_OK;
+    }
+
+    return esp_wifi_clear_default_wifi_driver_and_handlers(s_sta_netif);
+}
+
+static void sta_netif_destroy() {
+    if (unlikely(s_sta_netif == NULL)) {
+        return;
+    }
+
+    esp_netif_destroy(s_sta_netif);
+    s_sta_netif = NULL;
+}
+
+static esp_err_t wifi_start(closer_handle_t closer) {
+    ESP_RETURN_ON_ERROR(esp_netif_init(), TAG, "esp_netif_init");
+    closer_add(closer, (void *)esp_netif_deinit);
+
+    ESP_RETURN_ON_ERROR(esp_event_loop_create_default(), TAG, "esp_event_loop_create_default");
+    closer_add(closer, (void *)esp_event_loop_delete_default);
+
+    wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
+    ESP_RETURN_ON_ERROR(esp_wifi_init(&cfg), TAG, "esp_wifi_init");
+    closer_add(closer, (void *)esp_wifi_deinit);
+
+    esp_netif_inherent_config_t esp_netif_config = ESP_NETIF_INHERENT_DEFAULT_WIFI_STA();
+    s_sta_netif = esp_netif_create_wifi(WIFI_IF_STA, &esp_netif_config);
+
+    if (unlikely(s_sta_netif == NULL)) {
+        ESP_LOGE(TAG, "esp_netif_create_wifi");
+        return ESP_FAIL;
+    }
+    closer_add(closer, (void *)sta_netif_destroy);
+
+    ESP_RETURN_ON_ERROR(esp_wifi_set_default_wifi_sta_handlers(), TAG, "esp_wifi_set_default_wifi_sta_handlers");
+    closer_add(closer, (void *)delete_default_wifi_driver_and_handlers);
+
+    ESP_RETURN_ON_ERROR(esp_wifi_set_storage(WIFI_STORAGE_RAM), TAG, "esp_wifi_set_storage");
+    ESP_RETURN_ON_ERROR(esp_wifi_set_mode(GATEWAY_WIFI_MODE), TAG, "esp_wifi_set_mode");
+    ESP_RETURN_ON_ERROR(esp_wifi_start(), TAG, "esp_wifi_start");
+    closer_add(closer, (void *)esp_wifi_stop);
+
+    ESP_RETURN_ON_ERROR(esp_wifi_set_channel(GATEWAY_WIFI_CHANEL, WIFI_SECOND_CHAN_NONE), TAG, "esp_wifi_set_channel");
+
+    int8_t pwr;
+    ESP_RETURN_ON_ERROR(esp_wifi_get_max_tx_power(&pwr), TAG, "esp_wifi_get_max_tx_power");
+    ESP_LOGI(TAG, "WiFi TX power = %.2f dBm, pwr=%d", pwr * 0.25, pwr);
+
+    return ESP_OK;
+}
+
+esp_err_t app_run() {
+    ESP_RETURN_ON_ERROR(nvs_init(), TAG, "nvs_init");
+    ESP_RETURN_ON_ERROR(with_closer(wifi_start), TAG, "wifi_start");
+
+    return ESP_OK;
+}
+
+void app_main(void) {
+    ESP_ERROR_CHECK(app_run());
+}
