@@ -7,7 +7,7 @@
  * similar to Go's "defer".
  *
  * @author garik.djan <garik.djan@gmail.com>
- * @version 0.0.3
+ * @version 0.0.4
  */
 
 #ifndef _CLOSER_H_
@@ -22,7 +22,7 @@ extern "C" {
 /**
  * @brief Type of cleanup function to register with a closer.
  */
-typedef void (*closer_fn_t)(void);
+typedef esp_err_t (*closer_fn_t)(void);
 
 /**
  * @brief Opaque handle to a closer.
@@ -58,7 +58,7 @@ void closer_destroy(closer_handle_t h);
  *         ESP_ERR_INVALID_ARG if h or fn is NULL,
  *         ESP_ERR_NO_MEM if memory allocation fails.
  */
-esp_err_t closer_add(closer_handle_t h, closer_fn_t fn);
+esp_err_t closer_add(closer_handle_t h, closer_fn_t fn, const char *what);
 
 /**
  * @brief Calls all registered cleanup functions and clears the list.
@@ -102,6 +102,7 @@ void closer_close(closer_handle_t h);
 
 typedef struct closer_item {
     closer_fn_t fn;
+    const char *what;
     struct closer_item *next;
 } closer_item_t;
 
@@ -127,10 +128,17 @@ void closer_destroy(closer_handle_t h) {
         return;
     }
 
+    closer_item_t *item = h->top;
+    while (item) {
+        closer_item_t *tmp = item;
+        item = item->next;
+        free(tmp);
+    }
+
     free(h);
 }
 
-esp_err_t closer_add(closer_handle_t h, closer_fn_t fn) {
+esp_err_t closer_add(closer_handle_t h, closer_fn_t fn, const char *what) {
     if (unlikely(!h || !fn))
         return ESP_ERR_INVALID_ARG;
 
@@ -139,6 +147,7 @@ esp_err_t closer_add(closer_handle_t h, closer_fn_t fn) {
         return ESP_ERR_NO_MEM;
 
     item->fn = fn;
+    item->what = what;
     item->next = h->top;
     h->top = item;
 
@@ -149,10 +158,14 @@ void closer_close(closer_handle_t h) {
     if (unlikely(!h))
         return;
 
+    esp_err_t first_err = ESP_OK;
     closer_item_t *item = h->top;
     while (item) {
-        if (item->fn)
-            item->fn();
+        esp_err_t err = item->fn();
+        if (err != ESP_OK && first_err == ESP_OK) {
+            first_err = err;
+            ESP_LOGE(TAG, "closer failed: %s (%s)", item->what ? item->what : "<unknown>", esp_err_to_name(err));
+        }
 
         closer_item_t *tmp = item;
         item = item->next;

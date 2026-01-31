@@ -19,7 +19,7 @@ static esp_netif_t *s_sta_netif;
 #include "closer.h"
 
 typedef esp_err_t (*define_fn_t)(closer_handle_t);
-esp_err_t with_closer(define_fn_t fn) {
+static esp_err_t with_closer(define_fn_t fn) {
     esp_err_t err;
     closer_handle_t closer = NULL;
 
@@ -36,6 +36,16 @@ esp_err_t with_closer(define_fn_t fn) {
 
     return err;
 }
+
+#define DEFER(call, closer, cleanup_fn)                                                                                \
+    do {                                                                                                               \
+        esp_err_t err_rc_ = (call);                                                                                    \
+        if (err_rc_ != ESP_OK) {                                                                                       \
+            ESP_LOGE(TAG, "%s failed: %s", #call, esp_err_to_name(err_rc_));                                           \
+            return err_rc_;                                                                                            \
+        }                                                                                                              \
+        closer_add((closer), (cleanup_fn), #cleanup_fn);                                                               \
+    } while (0)
 
 __attribute__((cold)) static esp_err_t nvs_init() {
     esp_err_t ret = nvs_flash_init();
@@ -55,25 +65,22 @@ static esp_err_t delete_default_wifi_driver_and_handlers() {
     return esp_wifi_clear_default_wifi_driver_and_handlers(s_sta_netif);
 }
 
-static void sta_netif_destroy() {
+static esp_err_t sta_netif_destroy() {
     if (unlikely(s_sta_netif == NULL)) {
-        return;
+        return ESP_OK;
     }
 
     esp_netif_destroy(s_sta_netif);
     s_sta_netif = NULL;
+    return ESP_OK;
 }
 
 static esp_err_t wifi_start(closer_handle_t closer) {
-    ESP_RETURN_ON_ERROR(esp_netif_init(), TAG, "esp_netif_init");
-    closer_add(closer, (void *)esp_netif_deinit);
-
-    ESP_RETURN_ON_ERROR(esp_event_loop_create_default(), TAG, "esp_event_loop_create_default");
-    closer_add(closer, (void *)esp_event_loop_delete_default);
+    DEFER(esp_netif_init(), closer, esp_netif_deinit);
+    DEFER(esp_event_loop_create_default(), closer, esp_event_loop_delete_default);
 
     wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
-    ESP_RETURN_ON_ERROR(esp_wifi_init(&cfg), TAG, "esp_wifi_init");
-    closer_add(closer, (void *)esp_wifi_deinit);
+    DEFER(esp_wifi_init(&cfg), closer, esp_wifi_deinit);
 
     esp_netif_inherent_config_t esp_netif_config = ESP_NETIF_INHERENT_DEFAULT_WIFI_STA();
     s_sta_netif = esp_netif_create_wifi(WIFI_IF_STA, &esp_netif_config);
@@ -82,15 +89,14 @@ static esp_err_t wifi_start(closer_handle_t closer) {
         ESP_LOGE(TAG, "esp_netif_create_wifi");
         return ESP_FAIL;
     }
-    closer_add(closer, (void *)sta_netif_destroy);
+    closer_add(closer, sta_netif_destroy, "sta_netif_destroy");
 
-    ESP_RETURN_ON_ERROR(esp_wifi_set_default_wifi_sta_handlers(), TAG, "esp_wifi_set_default_wifi_sta_handlers");
-    closer_add(closer, (void *)delete_default_wifi_driver_and_handlers);
+    DEFER(esp_wifi_set_default_wifi_sta_handlers(), closer, delete_default_wifi_driver_and_handlers);
 
     ESP_RETURN_ON_ERROR(esp_wifi_set_storage(WIFI_STORAGE_RAM), TAG, "esp_wifi_set_storage");
     ESP_RETURN_ON_ERROR(esp_wifi_set_mode(GATEWAY_WIFI_MODE), TAG, "esp_wifi_set_mode");
-    ESP_RETURN_ON_ERROR(esp_wifi_start(), TAG, "esp_wifi_start");
-    closer_add(closer, (void *)esp_wifi_stop);
+
+    DEFER(esp_wifi_start(), closer, esp_wifi_stop);
 
     ESP_RETURN_ON_ERROR(esp_wifi_set_channel(GATEWAY_WIFI_CHANEL, WIFI_SECOND_CHAN_NONE), TAG, "esp_wifi_set_channel");
 
