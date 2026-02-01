@@ -76,6 +76,8 @@ esp_err_t wifi_start(closer_handle_t closer) {
     esp_netif_inherent_config_t esp_netif_config = ESP_NETIF_INHERENT_DEFAULT_WIFI_STA();
     s_sta_netif = esp_netif_create_wifi(WIFI_IF_STA, &esp_netif_config);
 
+    // esp_netif_create_default_wifi_sta(); // TODO: best use ^
+
     if (unlikely(s_sta_netif == NULL)) {
         ESP_LOGE(TAG, "esp_netif_create_wifi");
         return ESP_FAIL;
