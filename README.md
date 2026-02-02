@@ -46,3 +46,34 @@ Rel(esp_gateway, mqtt, "MQTT publish", "Wi-Fi / TCP")
 Rel(mqtt, apps, "MQTT subscribe", "TCP")
 Rel(apps, user, "Provides data / UI")
 ```
+
+## MVP
+В первой реализации можно сделать просто пересылку broadcast сообщений в MQTT
+тогда не нужно будет делать ничего связанного с пирами, пиры нужны только если я хочу сделать unicast общение и unicast
+
+А так при подключении можно сделать типа mac, last_seen  и если ответили типа FULL то удалить пира с самым мелким last_seen - если добавляем уже существующего просто обновить
+
+## Transport
+
+uint16_t 16-bit unsigned integers in little-endian order 
+uint32_t 32-bit unsigned integers in little-endian order
+
+### Control Packet type
+
+| Name | Value | Direction of flow | Type | Description |
+| --- | --- | --- | --- | -- |
+| Reserved| 0 | Forbidden | | Reserved |
+| CONNECT | 1 | Node to Gateway | multicast | Connection request |
+| CONNACK | 2 | Gateway to Node | unicast | Connect acknowledgment |
+| PUBLISH | 3 | Note to Gateway | unicast | Publish message |
+
+
+```mermaid
+---
+title: "Fixed Header"
+---
+packet
++4: "Flags specific to each Control Packet type"
++4: "Control Packet type"
++8: "Remaining Length"
+```
