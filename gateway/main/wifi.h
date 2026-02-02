@@ -16,3 +16,4 @@
 
 esp_err_t wifi_start(closer_handle_t closer);
 esp_err_t wifi_connect();
+uint8_t wifi_get_channel();

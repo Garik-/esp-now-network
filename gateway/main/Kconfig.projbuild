@@ -18,4 +18,23 @@ menu "ESP-NOW Gateway Configuration"
         range 0 14
         help
             The channel on which sending and receiving ESPNOW data.
+
+    config ESPNOW_HTTP_PORT
+		int "HTTP Server Port"
+		default 80
+		range 1 65535
+		help
+			Port number for the HTTP server.
+
+	config ESPNOW_MDNS_NAME
+		string "mDNS Name"
+		default "mydevice"
+		help
+			Name to register with mDNS.
+            
+    config ESPNOW_MDNS_INSTANCE_NAME
+		string "mDNS Instance Name"
+		default "mydevice_instance"
+		help
+			Instance Name name to register with mDNS.
 endmenu

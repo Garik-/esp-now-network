@@ -5,6 +5,8 @@ static const char *TAG = "wifi_gateway";
 static esp_netif_t *s_sta_netif = NULL;
 static TaskHandle_t xTaskToNotify = NULL;
 
+static uint8_t s_channel = 0;
+
 static esp_err_t delete_default_wifi_driver_and_handlers() {
     if (unlikely(s_sta_netif == NULL)) {
         return ESP_OK;
@@ -54,6 +56,9 @@ static void wifi_event_handler(void *arg, esp_event_base_t event_base, int32_t e
             break;
         case WIFI_EVENT_STA_CONNECTED: {
             wifi_event_sta_connected_t *evt = (wifi_event_sta_connected_t *)event_data;
+
+            s_channel = evt->channel; // TODO: atomic?
+
             ESP_LOGI(TAG, "Connected to AP, channel %d", evt->channel);
             break;
         }
@@ -143,4 +148,8 @@ cleanup:
     __atomic_store_n(&xTaskToNotify, NULL, __ATOMIC_SEQ_CST);
 
     return err;
+}
+
+uint8_t wifi_get_channel() {
+    return s_channel;
 }
