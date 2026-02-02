@@ -1,0 +1,15 @@
+version: '3'
+
+services:
+  mosquitto:
+    image: eclipse-mosquitto:latest
+    container_name: mosquitto
+    restart: unless-stopped
+    ports:
+      - "1883:1883" # Standard unencrypted MQTT port
+      #- "8883:8883" # Encrypted MQTT port (MQTT over TLS)
+      #- "9001:9001" # WebSockets port
+    volumes:
+      - ./mosquitto/config:/mosquitto/config:ro
+      - ./mosquitto/data:/mosquitto/data
+      - ./mosquitto/log:/mosquitto/log
