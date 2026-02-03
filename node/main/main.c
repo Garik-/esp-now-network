@@ -10,10 +10,6 @@
 
 #include "freertos/FreeRTOS.h"
 
-#define QUEUE_SIZE 5
-#define QUEUE_RECEIVE_TIMEOUT portMAX_DELAY // TODO: adjust timeout
-#define QUEUE_SEND_TIMEOUT portMAX_DELAY    // TODO: adjust timeout
-
 #define WAIT_NOTIFICATION pdMS_TO_TICKS(512)
 
 #define ESPNOW_CHANNEL 6
@@ -27,7 +23,6 @@ typedef struct {
 } __attribute__((packed)) packet_data_t;
 
 static TaskHandle_t xTaskToNotify = NULL;
-static QueueHandle_t s_event_queue = NULL;
 
 #define TRY(expr) ESP_RETURN_ON_ERROR((expr), TAG, "%s:%d", __func__, __LINE__)
 
@@ -81,45 +76,28 @@ static void send_cb(const esp_now_send_info_t *tx_info, esp_now_send_status_t st
     }
 }
 
-static void send_task(__attribute__((unused)) void *pvParameter) {
-    __atomic_store_n(&xTaskToNotify, xTaskGetCurrentTaskHandle(), __ATOMIC_SEQ_CST);
+static esp_err_t send_broadcast(const uint8_t *data, size_t len, esp_now_send_status_t *out_status,
+                                TickType_t xTicksToWait) {
+    static uint8_t broadcast_mac[ESP_NOW_ETH_ALEN] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
 
-    BaseType_t xResult;
-    uint32_t status;
-    packet_data_t data;
+    __atomic_store_n(&xTaskToNotify, xTaskGetCurrentTaskHandle(),
+                     __ATOMIC_SEQ_CST); // TODO: фигово наверное если часто вызывается или вызывается из разных потоков
 
-    uint8_t broadcast_mac[ESP_NOW_ETH_ALEN] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
-
-    for (;;) {
-        if (xQueueReceive(s_event_queue, &data, QUEUE_RECEIVE_TIMEOUT) == pdTRUE) {
-            if (esp_now_send(broadcast_mac, (const uint8_t *)&data, sizeof(packet_data_t)) != ESP_OK) {
-                ESP_LOGW(TAG, "Send error");
-
-                continue;
-            }
-
-            xResult = xTaskNotifyWait(pdFALSE,   /* Don't clear bits on entry. */
-                                      ULONG_MAX, /* Clear all bits on exit. */
-                                      &status,   /* Stores the notified value. */
-                                      WAIT_NOTIFICATION);
-
-            if (xResult != pdPASS) {
-                ESP_LOGW(TAG, "No notification received within the timeout period");
-            }
-        }
+    esp_err_t err = esp_now_send(broadcast_mac, data, len);
+    if (err != ESP_OK) {
+        return err;
     }
+
+    BaseType_t xResult = xTaskNotifyWait(pdFALSE, ULONG_MAX, (uint32_t *)out_status, xTicksToWait);
+
+    if (xResult != pdPASS) {
+        return ESP_ERR_TIMEOUT;
+    }
+
+    return ESP_OK;
 }
 
-static esp_err_t espnow_init() {
-    s_event_queue = xQueueCreate(QUEUE_SIZE, sizeof(packet_data_t));
-
-    if (s_event_queue == NULL) {
-        ESP_LOGE(TAG, "Failed to create event queue");
-        return ESP_FAIL;
-    }
-
-    // configASSERT(s_event_queue);
-
+__attribute__((cold)) static esp_err_t espnow_init() {
     TRY(esp_now_init());
     TRY(esp_now_register_send_cb(send_cb));
 
@@ -131,8 +109,6 @@ static esp_err_t espnow_init() {
     };
 
     TRY(esp_now_add_peer(&peer));
-
-    xTaskCreate(send_task, "send_task", 2048, NULL, tskIDLE_PRIORITY + 1, NULL);
 
     return ESP_OK;
 }
@@ -146,10 +122,18 @@ __attribute__((cold)) static esp_err_t app_run() {
         .start_flag = START_FLAG,
     };
 
+    esp_now_send_status_t status;
+    esp_err_t err;
+
     for (;;) {
-        if (xQueueSend(s_event_queue, &data, QUEUE_SEND_TIMEOUT) != pdTRUE) {
-            ESP_LOGE(TAG, "Failed to send to queue");
+        err = send_broadcast((const uint8_t *)&data, sizeof(packet_data_t), &status, WAIT_NOTIFICATION);
+        if (err != ESP_OK) {
+            ESP_LOGE(TAG, "Failed to send broadcast: %s", esp_err_to_name(err));
+        } else {
+            ESP_LOGI(TAG, "Broadcast sent, status: %s",
+                     status == ESP_NOW_SEND_SUCCESS ? "ESP_NOW_SEND_SUCCESS" : "ESP_NOW_SEND_FAIL");
         }
+
         vTaskDelay(pdMS_TO_TICKS(1000));
     }
 
