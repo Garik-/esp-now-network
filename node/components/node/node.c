@@ -8,11 +8,11 @@
 #include "esp_wifi.h"
 #include "nvs_flash.h"
 
-#include "include/node.h"
+#include "node.h"
 
 static const char *TAG = "NODE";
 static const uint8_t broadcast_mac[ESP_NOW_ETH_ALEN] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
-TaskHandle_t xTaskToNotify = NULL;
+static TaskHandle_t s_task_to_notify = NULL;
 
 #define TRY(expr) ESP_RETURN_ON_ERROR((expr), TAG, "%s:%d", __func__, __LINE__)
 
@@ -43,8 +43,8 @@ __attribute__((cold)) static esp_err_t nvs_init() {
     return ret;
 }
 
-static void send_cb(const esp_now_send_info_t *tx_info, esp_now_send_status_t status) {
-    TaskHandle_t to_notify = __atomic_load_n(&xTaskToNotify, __ATOMIC_SEQ_CST);
+static void send_cb(__attribute__((unused)) const esp_now_send_info_t *tx_info, esp_now_send_status_t status) {
+    TaskHandle_t to_notify = __atomic_load_n(&s_task_to_notify, __ATOMIC_SEQ_CST);
     if (unlikely(to_notify == NULL)) {
         return;
     }
@@ -61,7 +61,11 @@ static void send_cb(const esp_now_send_info_t *tx_info, esp_now_send_status_t st
 }
 
 esp_err_t node_broadcast(const uint8_t *data, size_t len, esp_now_send_status_t *out_status, TickType_t xTicksToWait) {
-    __atomic_store_n(&xTaskToNotify, xTaskGetCurrentTaskHandle(), __ATOMIC_SEQ_CST);
+    if (unlikely(data == NULL || len == 0)) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    __atomic_store_n(&s_task_to_notify, xTaskGetCurrentTaskHandle(), __ATOMIC_SEQ_CST);
 
     esp_err_t err = esp_now_send(broadcast_mac, data, len);
     if (unlikely(err != ESP_OK)) {
