@@ -11,7 +11,8 @@
 #include "node.h"
 
 static const char *TAG = "NODE";
-static const uint8_t broadcast_mac[ESP_NOW_ETH_ALEN] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
+static const uint8_t BROADCAST_MAC[ESP_NOW_ETH_ALEN] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
+
 static TaskHandle_t s_task_to_notify = NULL;
 
 #define TRY(expr) ESP_RETURN_ON_ERROR((expr), TAG, "%s:%d", __func__, __LINE__)
@@ -19,7 +20,7 @@ static TaskHandle_t s_task_to_notify = NULL;
 __attribute__((cold)) static esp_err_t wifi_init(uint8_t channel, const uint8_t *mac) {
     TRY(esp_netif_init());
     TRY(esp_event_loop_create_default());
-    wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
+    const wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
     TRY(esp_wifi_init(&cfg));
     TRY(esp_wifi_set_storage(WIFI_STORAGE_RAM));
     TRY(esp_wifi_set_mode(WIFI_MODE_STA));
@@ -60,25 +61,30 @@ static void send_cb(__attribute__((unused)) const esp_now_send_info_t *tx_info, 
     }
 }
 
-esp_err_t node_broadcast(const uint8_t *data, size_t len, esp_now_send_status_t *out_status, TickType_t xTicksToWait) {
-    if (unlikely(data == NULL || len == 0)) {
+esp_err_t node_send(const uint8_t *peer_addr, const uint8_t *data, size_t len, esp_now_send_status_t *out_status,
+                    TickType_t xTicksToWait) {
+    if (unlikely(peer_addr == NULL || data == NULL || len == 0)) {
         return ESP_ERR_INVALID_ARG;
     }
 
     __atomic_store_n(&s_task_to_notify, xTaskGetCurrentTaskHandle(), __ATOMIC_SEQ_CST);
 
-    esp_err_t err = esp_now_send(broadcast_mac, data, len);
+    const esp_err_t err = esp_now_send(peer_addr, data, len);
     if (unlikely(err != ESP_OK)) {
         return err;
     }
 
-    BaseType_t xResult = xTaskNotifyWait(pdFALSE, ULONG_MAX, (uint32_t *)out_status, xTicksToWait);
+    const BaseType_t xResult = xTaskNotifyWait(pdFALSE, ULONG_MAX, (uint32_t *)out_status, xTicksToWait);
 
     if (unlikely(xResult != pdPASS)) {
         return ESP_ERR_TIMEOUT;
     }
 
     return ESP_OK;
+}
+
+esp_err_t node_broadcast(const uint8_t *data, size_t len, node_send_status_t *out_status, TickType_t xTicksToWait) {
+    return node_send(BROADCAST_MAC, data, len, out_status, xTicksToWait);
 }
 
 __attribute__((cold)) static esp_err_t espnow_init(uint8_t channel) {
