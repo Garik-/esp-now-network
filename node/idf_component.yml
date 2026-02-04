@@ -1,0 +1,9 @@
+version: "0.0.1"
+description: "ESP-NOW node"
+url: "https://github.com/Garik-/esp-now-network/tree/main/node"
+issues: "https://github.com/Garik-/esp-now-network/issues"
+documentation: "https://github.com/Garik-/esp-now-network/tree/main/node/README.md"
+repository: "https://github.com/Garik-/esp-now-network.git"
+dependencies:
+  idf:
+    version: ">=5.0"
