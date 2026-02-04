@@ -4,6 +4,7 @@ url: "https://github.com/Garik-/esp-now-network/tree/main/node"
 issues: "https://github.com/Garik-/esp-now-network/issues"
 documentation: "https://github.com/Garik-/esp-now-network/tree/main/node/README.md"
 repository: "https://github.com/Garik-/esp-now-network.git"
+license: "MIT"
 dependencies:
   idf:
     version: ">=5.0"

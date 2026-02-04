@@ -1,0 +1,18 @@
+```bash
+source ~/esp/v5.5.2/esp-idf/export.sh
+export ESPPORT=/dev/tty.usbmodem101  
+```
+
+и так в чем тут заморот, а заморот в том что для инциализации очереди нужен тип - с реальным размером
+и для отправки тоже нужен реальный размер данных
+
+можно сделать const uint8_t buf*, size_t len  - тип но тогда нужно обязательно каким-то образом буфер или вычищать free если он был динамический
+
+теоретически можно сделать проще и реализовать блокирующую функцию отправки broadcast сообщения которая отправит данные и дождется ответа от callback что данные ушли и вернет статус отправки
+тогда в целом и очередь не нужна будет
+
+
+
+по поводу API можно сделать функцию init которая возвращает внутри teardown cancel функцию - которая вызывает closer_close, closer_destroy
+
+https://docs.espressif.com/projects/idf-component-manager/en/latest/guides/packaging_components.html?__cf_chl_rt_tk=4aYQsCPbR1qNdahOYFyD3PKaF2EOHfOhehJuoYAFHV8-1770212411-1.0.1.1-QRxlms8PD7rfW.5vmdtCb9kPaNcEyeIazeOcJTGp9Gg
