@@ -1,0 +1,19 @@
+dependencies:
+  idf:
+    source:
+      type: idf
+    version: 5.5.2
+  node:
+    dependencies:
+    - name: idf
+      version: '>=5.0'
+    source:
+      path: /Users/garikdjan/code/esp/esp-now-network/node
+      type: local
+    version: 0.0.1
+direct_dependencies:
+- idf
+- node
+manifest_hash: 7324c2ecc4859fe97eb47ad4fa1b49aa9fab4d9209434602bbb6c86fdff0917b
+target: esp32
+version: 2.0.0

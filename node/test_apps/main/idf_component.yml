@@ -1,0 +1,6 @@
+dependencies:
+  ## Required IDF version
+  idf: ">=5.0"
+  node:
+    version: "^0.0.1"
+    override_path: "../../"
