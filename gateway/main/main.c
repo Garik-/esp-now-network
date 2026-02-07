@@ -11,6 +11,7 @@ static httpd_handle_t s_server = NULL;
 #define CLOSER_IMPLEMENTATION
 #include "closer.h"
 
+#include "config.h"
 #include "espnow.h"
 #include "wifi.h"
 

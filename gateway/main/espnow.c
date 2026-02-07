@@ -1,3 +1,15 @@
+#include "esp_check.h"
+#include "esp_log.h"
+#include "esp_mac.h"
+#include "esp_now.h"
+
+#include "freertos/FreeRTOS.h"
+#include "freertos/queue.h"
+
+#include "mqtt_client.h"
+
+#include "config.h"
+
 #include "espnow.h"
 
 #define QUEUE_SIZE 6
@@ -7,6 +19,8 @@
 
 static const char *TAG = "esp_now_gateway";
 
+#define TRY(expr) ESP_RETURN_ON_ERROR((expr), TAG, "%s:%d", __func__, __LINE__)
+
 typedef struct {
     uint8_t mac_addr[ESP_NOW_ETH_ALEN];
     uint8_t *data;
@@ -14,7 +28,6 @@ typedef struct {
 } event_recv_cb_t;
 
 static QueueHandle_t s_event_queue = NULL;
-static uint8_t s_peer_mac[ESP_NOW_ETH_ALEN] = {0x02, 0x12, 0x34, 0x56, 0x78, 0x9A}; // TODO: set from broadcast
 
 static uint8_t data_buffer_pool[QUEUE_SIZE][DATA_BUFFER_SIZE];
 static uint8_t data_buffer_index = 0;
@@ -65,6 +78,8 @@ static void espnow_task(void *pvParameter) {
 
     ESP_LOGI(TAG, "start receive peer data task");
 
+    char mac_str[27];
+
     for (;;) {
         if (s_event_queue == NULL) {
             ESP_LOGE(TAG, "event queue is NULL");
@@ -76,8 +91,9 @@ static void espnow_task(void *pvParameter) {
             continue;
         }
 
-        ESP_LOGI(TAG, "receive data from " MACSTR ", len: %d", MAC2STR(recv_cb.mac_addr),
-                 recv_cb.data_len); // TODO: delete
+        snprintf(mac_str, sizeof(mac_str), "/device/" MACSTR "", MAC2STR(recv_cb.mac_addr));
+
+        ESP_LOGI(TAG, "receive data from %s, len: %d", mac_str, recv_cb.data_len); // TODO: delete
     }
 }
 
@@ -89,17 +105,17 @@ static esp_err_t espnow_init() {
     }
 
     /* Initialize ESPNOW and register sending and receiving callback function. */
-    ESP_RETURN_ON_ERROR(esp_now_init(), TAG, "esp_now_init");
-    ESP_RETURN_ON_ERROR(esp_now_register_recv_cb(espnow_recv_cb), TAG, "esp_now_register_recv_cb");
+    TRY(esp_now_init());
+    TRY(esp_now_register_recv_cb(espnow_recv_cb));
 
-    esp_now_peer_info_t peer = {
+    const esp_now_peer_info_t peer = {
         .channel = GATEWAY_WIFI_CHANEL,
         .ifidx = GATEWAY_WIFI_IF,
         .encrypt = false,
+        .peer_addr = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF},
     };
-    memcpy(peer.peer_addr, s_peer_mac, ESP_NOW_ETH_ALEN);
 
-    ESP_RETURN_ON_ERROR(esp_now_add_peer(&peer), TAG, "esp_now_add_peer");
+    TRY(esp_now_add_peer(&peer));
 
     xTaskCreate(espnow_task, "espnow_task", 1024 * 2, NULL, 4, NULL); // TODO: adjust stack size
 

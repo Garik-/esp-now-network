@@ -1,3 +1,13 @@
+#include "esp_check.h"
+
+#include "esp_log.h"
+#include "esp_netif.h"
+#include "esp_wifi.h"
+
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+
+#include "config.h"
 #include "wifi.h"
 
 static const char *TAG = "wifi_gateway";
@@ -100,10 +110,6 @@ esp_err_t wifi_start(closer_handle_t closer) {
     DEFER(esp_wifi_start(), closer, esp_wifi_stop);
 
     ESP_RETURN_ON_ERROR(esp_wifi_set_channel(GATEWAY_WIFI_CHANEL, WIFI_SECOND_CHAN_NONE), TAG, "esp_wifi_set_channel");
-
-    int8_t pwr;
-    ESP_RETURN_ON_ERROR(esp_wifi_get_max_tx_power(&pwr), TAG, "esp_wifi_get_max_tx_power");
-    ESP_LOGI(TAG, "WiFi TX power = %.2f dBm, pwr=%d", pwr * 0.25, pwr);
 
     return ESP_OK;
 }
