@@ -81,7 +81,7 @@ static void wifi_event_handler(void *arg, esp_event_base_t event_base, int32_t e
     }
 }
 
-esp_err_t wifi_start(closer_handle_t closer) {
+esp_err_t wifi_start(closer_handle_t closer, __attribute__((unused)) void *arg) {
     DEFER(esp_netif_init(), closer, esp_netif_deinit);
     DEFER(esp_event_loop_create_default(), closer, esp_event_loop_delete_default);
 

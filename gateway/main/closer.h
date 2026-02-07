@@ -29,7 +29,7 @@ typedef esp_err_t (*closer_fn_t)(void);
  */
 typedef struct closer_t *closer_handle_t;
 
-typedef esp_err_t (*with_closer_fn_t)(closer_handle_t);
+typedef esp_err_t (*with_closer_fn_t)(closer_handle_t, void *arg);
 
 /**
  * @brief Creates a new closer object.
@@ -71,7 +71,7 @@ esp_err_t closer_add(closer_handle_t h, closer_fn_t fn, const char *what);
  */
 void closer_close(closer_handle_t h);
 
-esp_err_t with_closer(with_closer_fn_t fn);
+esp_err_t with_closer(with_closer_fn_t fn, void *arg);
 
 #define DEFER(call, closer, cleanup_fn)                                                                                \
     do {                                                                                                               \
@@ -160,7 +160,7 @@ void closer_close(closer_handle_t h) {
     h->top = NULL;
 }
 
-esp_err_t with_closer(with_closer_fn_t fn) {
+esp_err_t with_closer(with_closer_fn_t fn, void *arg) {
     esp_err_t err;
     closer_handle_t closer = NULL;
 
@@ -168,7 +168,7 @@ esp_err_t with_closer(with_closer_fn_t fn) {
     if (unlikely(err != ESP_OK))
         return err;
 
-    err = fn(closer);
+    err = fn(closer, arg);
     if (err != ESP_OK) {
         closer_close(closer);
     }

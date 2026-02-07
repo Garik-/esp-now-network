@@ -2,6 +2,7 @@
 #include "esp_err.h"
 #include "esp_http_server.h"
 #include "esp_log.h"
+#include "esp_mac.h"
 #include "mdns.h"
 #include "nvs_flash.h"
 
@@ -80,10 +81,18 @@ static esp_err_t start_webserver() {
     return ESP_OK;
 }
 
+espnow_rx_handler_t handle(const espnow_rx_t *rx) {
+    char mac_str[27];
+    snprintf(mac_str, sizeof(mac_str), "/device/" MACSTR "", MAC2STR(rx->mac_addr));
+
+    ESP_LOGI(TAG, "received data from %s, len: %d", mac_str, rx->len); // TODO: delete
+    return ESP_OK;
+}
+
 esp_err_t app_run() {
     ESP_RETURN_ON_ERROR(nvs_init(), TAG, "nvs_init");
-    ESP_RETURN_ON_ERROR(with_closer(wifi_start), TAG, "wifi_start");
-    ESP_RETURN_ON_ERROR(with_closer(espnow_start), TAG, "espnow_start");
+    ESP_RETURN_ON_ERROR(with_closer(wifi_start, NULL), TAG, "wifi_start");
+    ESP_RETURN_ON_ERROR(with_closer(espnow_start, &handle), TAG, "espnow_start");
     ESP_RETURN_ON_ERROR(wifi_connect(), TAG, "wifi_connect");
     ESP_RETURN_ON_ERROR(mdns_start(), TAG, "mdns_start");
     ESP_RETURN_ON_ERROR(start_webserver(), TAG, "httpd_start");
