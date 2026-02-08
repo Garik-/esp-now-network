@@ -1,4 +1,4 @@
-idf_component_register(SRCS "wifi.c" "espnow.c" "main.c"
-                    PRIV_REQUIRES nvs_flash esp_event esp_netif esp_wifi mqtt
+idf_component_register(SRCS "httpd.c" "settings.c" "wifi.c" "espnow.c" "main.c"
+                    PRIV_REQUIRES nvs_flash esp_event esp_netif esp_wifi mqtt esp_http_server
                     INCLUDE_DIRS "."
                     INCLUDE_DIRS "../../common")

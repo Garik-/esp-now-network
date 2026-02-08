@@ -4,10 +4,13 @@
 #include "esp_netif.h"
 #include "esp_wifi.h"
 
+#include <string.h>
+
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
 #include "config.h"
+#include "settings.h"
 #include "wifi.h"
 
 static const char *const TAG = "wifi_gateway";
@@ -71,10 +74,13 @@ static esp_err_t wifi_set_sta_config(void) {
     wifi_config_t wifi_config = {
         .sta =
             {
-                .ssid = GATEWAY_WIFI_SSID,
-                .password = GATEWAY_WIFI_PASSWORD,
+                .ssid = "",
+                .password = "",
             },
     };
+
+    strlcpy((char *)wifi_config.sta.ssid, settings_wifi_ssid(), sizeof(wifi_config.sta.ssid));
+    strlcpy((char *)wifi_config.sta.password, settings_wifi_password(), sizeof(wifi_config.sta.password));
 
     return esp_wifi_set_config(WIFI_IF_STA, &wifi_config);
 }

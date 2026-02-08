@@ -12,6 +12,8 @@ static const char *const TAG = "main_gateway";
 
 #include "config.h"
 #include "espnow.h"
+#include "httpd.h"
+#include "settings.h"
 #include "wifi.h"
 
 static esp_mqtt_client_handle_t s_client = NULL;
@@ -31,9 +33,9 @@ __attribute__((cold)) static esp_err_t nvs_init() {
 __attribute__((cold)) static esp_err_t mqtt_app_start() {
     esp_err_t err = ESP_OK;
     const esp_mqtt_client_config_t mqtt_cfg = {
-        .broker.address.uri = GATEWAY_BROKER_URL,
-        .credentials.username = GATEWAY_BROKER_USERNAME,
-        .credentials.authentication.password = GATEWAY_BROKER_PASSWORD,
+        .broker.address.uri = settings_mqtt_uri(),
+        .credentials.username = settings_mqtt_user(),
+        .credentials.authentication.password = settings_mqtt_password(),
     };
 
     s_client = esp_mqtt_client_init(&mqtt_cfg);
@@ -67,15 +69,20 @@ static esp_err_t handle(const espnow_rx_t *rx) {
     return ESP_OK;
 }
 
-esp_err_t app_run() {
+static esp_err_t app_run() {
     ESP_RETURN_ON_ERROR(nvs_init(), TAG, "nvs_init");
+    ESP_RETURN_ON_ERROR(settings_init(), TAG, "settings_init");
     ESP_RETURN_ON_ERROR(with_closer(wifi_start, NULL), TAG, "wifi_start");
     ESP_RETURN_ON_ERROR(with_closer(espnow_start, &handle), TAG, "espnow_start");
     ESP_RETURN_ON_ERROR(mqtt_app_start(), TAG, "mqtt_app_start");
+    ESP_RETURN_ON_ERROR(httpd_start_server(), TAG, "httpd_start_server");
 
     return ESP_OK;
 }
 
 void app_main(void) {
-    ESP_ERROR_CHECK(app_run());
+    esp_err_t err = app_run();
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "app run failed: %s", esp_err_to_name(err));
+    }
 }
