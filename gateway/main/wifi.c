@@ -17,24 +17,6 @@ static TaskHandle_t xTaskToNotify = NULL;
 
 static uint8_t s_channel = 0;
 
-static esp_err_t delete_default_wifi_driver_and_handlers() {
-    if (unlikely(s_sta_netif == NULL)) {
-        return ESP_OK;
-    }
-
-    return esp_wifi_clear_default_wifi_driver_and_handlers(s_sta_netif);
-}
-
-static esp_err_t sta_netif_destroy() {
-    if (unlikely(s_sta_netif == NULL)) {
-        return ESP_OK;
-    }
-
-    esp_netif_destroy(s_sta_netif);
-    s_sta_netif = NULL;
-    return ESP_OK;
-}
-
 static void handler_on_sta_got_ip(void *arg, esp_event_base_t event_base, int32_t event_id, void *event_data) {
     ip_event_got_ip_t *event = (ip_event_got_ip_t *)event_data;
     if (event->esp_netif != s_sta_netif) {
@@ -88,18 +70,32 @@ esp_err_t wifi_start(closer_handle_t closer, __attribute__((unused)) void *arg) 
     wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
     DEFER(esp_wifi_init(&cfg), closer, esp_wifi_deinit);
 
-    esp_netif_inherent_config_t esp_netif_config = ESP_NETIF_INHERENT_DEFAULT_WIFI_STA();
-    s_sta_netif = esp_netif_create_wifi(WIFI_IF_STA, &esp_netif_config);
+    // esp_netif_inherent_config_t esp_netif_config = ESP_NETIF_INHERENT_DEFAULT_WIFI_STA();
+    // s_sta_netif = esp_netif_create_wifi(WIFI_IF_STA, &esp_netif_config);
 
     // esp_netif_create_default_wifi_sta(); // TODO: best use ^
 
+    s_sta_netif = esp_netif_create_default_wifi_sta();
+
     if (unlikely(s_sta_netif == NULL)) {
-        ESP_LOGE(TAG, "esp_netif_create_wifi");
+        ESP_LOGE(TAG, "esp_netif_create_default_wifi_sta");
         return ESP_FAIL;
     }
-    closer_add(closer, sta_netif_destroy, "sta_netif_destroy");
 
-    DEFER(esp_wifi_set_default_wifi_sta_handlers(), closer, delete_default_wifi_driver_and_handlers);
+    // closer_add(closer, esp_netif_destroy_default_wifi, s_sta_netif);
+
+    esp_netif_t *ap_netif = esp_netif_create_default_wifi_ap();
+
+    if (unlikely(ap_netif == NULL)) {
+        ESP_LOGE(TAG, "esp_netif_create_default_wifi_ap");
+        return ESP_FAIL;
+    }
+
+    // closer_add(closer, esp_netif_destroy_default_wifi, s_ap_netif);
+
+    //  closer_add(esp_netif_destroy_default_wifi, closer, "esp_netif_destroy_default_wifi");
+
+    // DEFER(esp_wifi_set_default_wifi_sta_handlers(), closer, delete_default_wifi_driver_and_handlers);
 
     ESP_RETURN_ON_ERROR(esp_wifi_set_storage(WIFI_STORAGE_RAM), TAG, "esp_wifi_set_storage");
     ESP_RETURN_ON_ERROR(esp_wifi_set_mode(GATEWAY_WIFI_MODE), TAG, "esp_wifi_set_mode");

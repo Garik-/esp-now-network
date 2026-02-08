@@ -26,41 +26,12 @@ __attribute__((cold)) static esp_err_t nvs_init() {
     return ret;
 }
 
-#define WAIT_MQTT_CONNECTION_TIMEOUT_MS 10000
-
-static void esp_mqtt_connected_event_handler(void *arg, esp_event_base_t event_base, int32_t event_id,
-                                             void *event_data) {
-    if (unlikely(arg == NULL)) {
-        return;
-    }
-
-    if (unlikely(event_id != MQTT_EVENT_CONNECTED)) {
-        ESP_LOGW(TAG, "unexpected event_id: %d", event_id);
-        return;
-    }
-
-    if (xPortInIsrContext()) {
-        BaseType_t xHigherPriorityTaskWoken = pdFALSE;
-        xTaskNotifyFromISR((TaskHandle_t)arg, 0, eSetValueWithOverwrite, &xHigherPriorityTaskWoken);
-        if (xHigherPriorityTaskWoken) {
-            portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
-        }
-    } else {
-        xTaskNotify((TaskHandle_t)arg, 0, eSetValueWithOverwrite);
-    }
-}
-
 __attribute__((cold)) static esp_err_t mqtt_app_start() {
-
-    esp_err_t err;
-
     esp_mqtt_client_config_t mqtt_cfg = {
         .broker.address.uri = GATEWAY_BROKER_URL,
         .credentials.username = GATEWAY_BROKER_USERNAME,
         .credentials.authentication.password = GATEWAY_BROKER_PASSWORD,
     };
-
-    TaskHandle_t xTaskToNotify = xTaskGetCurrentTaskHandle();
 
     s_client = esp_mqtt_client_init(&mqtt_cfg);
     if (unlikely(s_client == NULL)) {
@@ -68,32 +39,7 @@ __attribute__((cold)) static esp_err_t mqtt_app_start() {
         return ESP_FAIL;
     }
 
-    err =
-        esp_mqtt_client_register_event(s_client, MQTT_EVENT_CONNECTED, esp_mqtt_connected_event_handler, xTaskToNotify);
-    if (unlikely(err != ESP_OK)) {
-        ESP_LOGE(TAG, "Failed to register MQTT event handler: %s", esp_err_to_name(err));
-        esp_mqtt_client_destroy(s_client);
-
-        s_client = NULL;
-        return err;
-    }
-
-    err = esp_mqtt_client_start(s_client);
-
-    if (err == ESP_OK) {
-        if (xTaskNotifyWait(pdFALSE, ULONG_MAX, NULL, pdMS_TO_TICKS(WAIT_MQTT_CONNECTION_TIMEOUT_MS)) == pdPASS) {
-            return ESP_OK;
-        }
-
-        err = ESP_ERR_TIMEOUT;
-    }
-
-    esp_mqtt_client_stop(s_client);
-    esp_mqtt_client_destroy(s_client);
-
-    s_client = NULL;
-
-    return err;
+    return esp_mqtt_client_start(s_client);
 }
 
 espnow_rx_handler_t handle(const espnow_rx_t *rx) {
