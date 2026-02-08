@@ -11,6 +11,7 @@
 
 #define QUEUE_SIZE 6
 #define MAXDELAY_MS 512
+#define STACK_DEPTH 4096
 
 static const char *TAG = "esp_now_gateway";
 
@@ -25,7 +26,7 @@ static esp_err_t espnow_deinit() {
 }
 
 static void espnow_recv_cb(const esp_now_recv_info_t *recv_info, const uint8_t *data, int len) {
-    if (data == NULL || len <= 0 || len > DATA_BUFFER_SIZE) {
+    if (recv_info == NULL || data == NULL || len <= 0 || len > DATA_BUFFER_SIZE) {
         ESP_LOGE(TAG, "Receive cb arg error");
         return;
     }
@@ -81,7 +82,8 @@ static esp_err_t espnow_init(espnow_rx_handler_t handle_fn) {
 
     TRY(esp_now_add_peer(&peer));
 
-    xTaskCreate(espnow_task, "espnow_task", 1024 * 4, handle_fn, tskIDLE_PRIORITY + 1, NULL); // TODO: adjust stack size
+    xTaskCreate(espnow_task, "espnow_task", STACK_DEPTH, handle_fn, tskIDLE_PRIORITY + 1,
+                NULL); // TODO: adjust stack size
 
     return ESP_OK;
 }
