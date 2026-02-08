@@ -61,7 +61,6 @@ esp_err_t app_run() {
     ESP_RETURN_ON_ERROR(nvs_init(), TAG, "nvs_init");
     ESP_RETURN_ON_ERROR(with_closer(wifi_start, NULL), TAG, "wifi_start");
     ESP_RETURN_ON_ERROR(with_closer(espnow_start, &handle), TAG, "espnow_start");
-    ESP_RETURN_ON_ERROR(wifi_connect(), TAG, "wifi_connect"); // TODO: add reconnect on disconnect
 
     ESP_RETURN_ON_ERROR(mqtt_app_start(), TAG, "mqtt_app_start");
 

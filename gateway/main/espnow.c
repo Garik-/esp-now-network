@@ -82,7 +82,7 @@ static esp_err_t espnow_init(espnow_rx_handler_t handle_fn) {
 
     TRY(esp_now_add_peer(&peer));
 
-    xTaskCreate(espnow_task, "espnow_task", 1024 * 4, handle_fn, 4, NULL); // TODO: adjust stack size
+    xTaskCreate(espnow_task, "espnow_task", 1024 * 4, handle_fn, tskIDLE_PRIORITY + 1, NULL); // TODO: adjust stack size
 
     return ESP_OK;
 }
