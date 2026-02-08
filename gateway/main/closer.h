@@ -13,7 +13,13 @@
 #ifndef _CLOSER_H_
 #define _CLOSER_H_
 
+#include "esp_check.h"
 #include "esp_err.h"
+#include "esp_log.h"
+
+#ifndef CLOSER_TAG
+#define CLOSER_TAG "closer"
+#endif
 
 #ifdef __cplusplus
 extern "C" {
@@ -77,7 +83,7 @@ esp_err_t with_closer(with_closer_fn_t fn, void *arg);
     do {                                                                                                               \
         esp_err_t err_rc_ = (call);                                                                                    \
         if (err_rc_ != ESP_OK) {                                                                                       \
-            ESP_LOGE(TAG, "%s failed: %s", #call, esp_err_to_name(err_rc_));                                           \
+            ESP_LOGE(CLOSER_TAG, "%s failed: %s", #call, esp_err_to_name(err_rc_));                                    \
             return err_rc_;                                                                                            \
         }                                                                                                              \
         closer_add((closer), (cleanup_fn), #cleanup_fn);                                                               \
@@ -109,7 +115,7 @@ esp_err_t closer_create(closer_handle_t *out) {
 
 void closer_destroy(closer_handle_t h) {
     if (unlikely(!h)) {
-        ESP_LOGW(TAG, "closer_destroy called with NULL handle");
+        ESP_LOGW(CLOSER_TAG, "closer_destroy called with NULL handle");
         return;
     }
 
@@ -149,7 +155,7 @@ void closer_close(closer_handle_t h) {
         esp_err_t err = item->fn();
         if (err != ESP_OK && first_err == ESP_OK) {
             first_err = err;
-            ESP_LOGE(TAG, "closer failed: %s (%s)", item->what ? item->what : "<unknown>", esp_err_to_name(err));
+            ESP_LOGE(CLOSER_TAG, "closer failed: %s (%s)", item->what ? item->what : "<unknown>", esp_err_to_name(err));
         }
 
         closer_item_t *tmp = item;

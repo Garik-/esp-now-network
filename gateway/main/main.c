@@ -5,7 +5,7 @@
 #include "mqtt_client.h"
 #include "nvs_flash.h"
 
-static const char *TAG = "main_gateway";
+static const char *const TAG = "main_gateway";
 
 #define CLOSER_IMPLEMENTATION
 #include "closer.h"
@@ -16,7 +16,7 @@ static const char *TAG = "main_gateway";
 
 static esp_mqtt_client_handle_t s_client = NULL;
 
-#define TRY(expr) ESP_RETURN_ON_ERROR((expr), TAG, "%s:%d", __func__, __LINE__)
+#define MQTT_TOPIC_MAX_LEN 27 // "/device/" + MACSTR + '\0'
 
 __attribute__((cold)) static esp_err_t nvs_init() {
     esp_err_t ret = nvs_flash_init();
@@ -29,28 +29,35 @@ __attribute__((cold)) static esp_err_t nvs_init() {
 }
 
 __attribute__((cold)) static esp_err_t mqtt_app_start() {
-    esp_mqtt_client_config_t mqtt_cfg = {
+    esp_err_t err = ESP_OK;
+    const esp_mqtt_client_config_t mqtt_cfg = {
         .broker.address.uri = GATEWAY_BROKER_URL,
         .credentials.username = GATEWAY_BROKER_USERNAME,
         .credentials.authentication.password = GATEWAY_BROKER_PASSWORD,
     };
 
     s_client = esp_mqtt_client_init(&mqtt_cfg);
-    if (unlikely(s_client == NULL)) {
+    if (s_client == NULL) {
         ESP_LOGE(TAG, "Failed to initialize MQTT client");
         return ESP_FAIL;
     }
 
-    return esp_mqtt_client_start(s_client);
+    err = esp_mqtt_client_start(s_client);
+    if (err != ESP_OK) {
+        esp_mqtt_client_destroy(s_client);
+        s_client = NULL;
+    }
+
+    return err;
 }
 
-espnow_rx_handler_t handle(const espnow_rx_t *rx) {
+static esp_err_t handle(const espnow_rx_t *rx) {
     if (s_client == NULL) {
         ESP_LOGW(TAG, "mqtt client is not initialized");
         return ESP_OK;
     }
 
-    char topic[27];
+    char topic[MQTT_TOPIC_MAX_LEN];
     snprintf(topic, sizeof(topic), "/device/" MACSTR "", MAC2STR(rx->mac_addr));
 
     int msg_id = esp_mqtt_client_publish(s_client, topic, (const char *)rx->data, rx->len, GATEWAY_BROKER_QOS,
@@ -61,10 +68,10 @@ espnow_rx_handler_t handle(const espnow_rx_t *rx) {
 }
 
 esp_err_t app_run() {
-    TRY(nvs_init());
-    TRY(with_closer(wifi_start, NULL));
-    TRY(with_closer(espnow_start, &handle));
-    TRY(mqtt_app_start());
+    ESP_RETURN_ON_ERROR(nvs_init(), TAG, "nvs_init");
+    ESP_RETURN_ON_ERROR(with_closer(wifi_start, NULL), TAG, "wifi_start");
+    ESP_RETURN_ON_ERROR(with_closer(espnow_start, &handle), TAG, "espnow_start");
+    ESP_RETURN_ON_ERROR(mqtt_app_start(), TAG, "mqtt_app_start");
 
     return ESP_OK;
 }

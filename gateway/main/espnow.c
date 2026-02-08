@@ -9,17 +9,25 @@
 #include "config.h"
 #include "espnow.h"
 
-#define QUEUE_SIZE 6
-#define MAXDELAY_MS 512
-#define STACK_DEPTH 4096
+#define QUEUE_SIZE 6     // Max pending ESP-NOW packets before drop.
+#define MAXDELAY_MS 512  // Max queue wait/send time to avoid blocking callbacks.
+#define STACK_DEPTH 4096 // Stack size for ESP-NOW task.
 
-static const char *TAG = "esp_now_gateway";
+static const char *const TAG = "esp_now_gateway";
 
-#define TRY(expr) ESP_RETURN_ON_ERROR((expr), TAG, "%s:%d", __func__, __LINE__)
+static inline esp_err_t check_err(esp_err_t err, const char *what) {
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "%s failed: %s", what, esp_err_to_name(err));
+    }
+    return err;
+}
 
 static QueueHandle_t s_event_queue = NULL;
 
 static esp_err_t espnow_deinit() {
+    espnow_rx_t rx = {0}; // sentinel for task exit
+    xQueueSend(s_event_queue, &rx, pdMS_TO_TICKS(MAXDELAY_MS));
+
     vQueueDelete(s_event_queue);
     s_event_queue = NULL;
     return esp_now_deinit();
@@ -28,6 +36,11 @@ static esp_err_t espnow_deinit() {
 static void espnow_recv_cb(const esp_now_recv_info_t *recv_info, const uint8_t *data, int len) {
     if (recv_info == NULL || data == NULL || len <= 0 || len > DATA_BUFFER_SIZE) {
         ESP_LOGE(TAG, "Receive cb arg error");
+        return;
+    }
+
+    if (s_event_queue == NULL) {
+        ESP_LOGW(TAG, "Receive queue not initialized");
         return;
     }
 
@@ -50,16 +63,21 @@ static void espnow_task(void *handle_fn) {
 
     for (;;) {
         if (s_event_queue == NULL) {
-            ESP_LOGE(TAG, "event queue is NULL");
-            vTaskDelete(NULL);
+            break;
         }
 
-        if (xQueueReceive(s_event_queue, &rx, pdMS_TO_TICKS(MAXDELAY_MS)) != pdTRUE) {
+        if (xQueueReceive(s_event_queue, &rx, portMAX_DELAY) != pdTRUE) {
             continue;
+        }
+
+        if (rx.len == 0) { // sentinel for task exit
+            break;
         }
 
         ((espnow_rx_handler_t)handle_fn)(&rx);
     }
+
+    vTaskDelete(NULL);
 }
 
 static esp_err_t espnow_init(espnow_rx_handler_t handle_fn) {
@@ -70,8 +88,8 @@ static esp_err_t espnow_init(espnow_rx_handler_t handle_fn) {
     }
 
     /* Initialize ESPNOW and register sending and receiving callback function. */
-    TRY(esp_now_init());
-    TRY(esp_now_register_recv_cb(espnow_recv_cb));
+    ESP_RETURN_ON_ERROR(esp_now_init(), TAG, "esp_now_init");
+    ESP_RETURN_ON_ERROR(esp_now_register_recv_cb(espnow_recv_cb), TAG, "esp_now_register_recv_cb");
 
     const esp_now_peer_info_t peer = {
         .channel = GATEWAY_WIFI_CHANEL,
@@ -80,10 +98,12 @@ static esp_err_t espnow_init(espnow_rx_handler_t handle_fn) {
         .peer_addr = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF},
     };
 
-    TRY(esp_now_add_peer(&peer));
+    ESP_RETURN_ON_ERROR(esp_now_add_peer(&peer), TAG, "esp_now_add_peer");
 
-    xTaskCreate(espnow_task, "espnow_task", STACK_DEPTH, handle_fn, tskIDLE_PRIORITY + 1,
-                NULL); // TODO: adjust stack size
+    if (xTaskCreate(espnow_task, "espnow_task", STACK_DEPTH, handle_fn, tskIDLE_PRIORITY + 1, NULL) != pdPASS) {
+        ESP_LOGE(TAG, "Failed to create espnow_task");
+        return ESP_FAIL;
+    }
 
     return ESP_OK;
 }

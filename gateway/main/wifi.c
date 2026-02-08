@@ -10,17 +10,18 @@
 #include "config.h"
 #include "wifi.h"
 
-static const char *TAG = "wifi_gateway";
+static const char *const TAG = "wifi_gateway";
 
 static esp_netif_t *s_sta_netif = NULL;
 
-static void handler_on_sta_got_ip(void *arg, esp_event_base_t event_base, int32_t event_id, void *event_data) {
-    TaskHandle_t to_notify = (TaskHandle_t)arg;
+static void handler_on_sta_got_ip(void *arg, __attribute__((unused)) esp_event_base_t event_base,
+                                  __attribute__((unused)) int32_t event_id, void *event_data) {
+    const TaskHandle_t to_notify = (const TaskHandle_t)arg;
     if (to_notify == NULL) {
         return;
     }
 
-    ip_event_got_ip_t *event = (ip_event_got_ip_t *)event_data;
+    const ip_event_got_ip_t *event = (const ip_event_got_ip_t *)event_data;
     if (event->esp_netif != s_sta_netif) {
         ESP_LOGW(TAG, "Got IP event for unknown netif");
         return;
@@ -39,7 +40,8 @@ static void handler_on_sta_got_ip(void *arg, esp_event_base_t event_base, int32_
     }
 }
 
-static void wifi_event_handler(void *arg, esp_event_base_t event_base, int32_t event_id, void *event_data) {
+static void wifi_event_handler(__attribute__((unused)) void *arg, esp_event_base_t event_base, int32_t event_id,
+                               __attribute__((unused)) void *event_data) {
     if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED) {
         ESP_LOGI(TAG, "retry to connect to the AP");
         esp_wifi_connect();
@@ -52,6 +54,29 @@ static esp_err_t wifi_wait_ip(TickType_t xTicksToWait) {
     }
 
     return ESP_OK;
+}
+
+static esp_err_t wifi_register_handlers() {
+    ESP_RETURN_ON_ERROR(esp_event_handler_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &wifi_event_handler, NULL), TAG,
+                        "esp_event_handler_register");
+
+    ESP_RETURN_ON_ERROR(
+        esp_event_handler_register(IP_EVENT, IP_EVENT_STA_GOT_IP, &handler_on_sta_got_ip, xTaskGetCurrentTaskHandle()),
+        TAG, "esp_event_handler_register");
+
+    return ESP_OK;
+}
+
+static esp_err_t wifi_set_sta_config(void) {
+    wifi_config_t wifi_config = {
+        .sta =
+            {
+                .ssid = GATEWAY_WIFI_SSID,
+                .password = GATEWAY_WIFI_PASSWORD,
+            },
+    };
+
+    return esp_wifi_set_config(WIFI_IF_STA, &wifi_config);
 }
 
 esp_err_t wifi_start(closer_handle_t closer, __attribute__((unused)) void *arg) {
@@ -67,25 +92,8 @@ esp_err_t wifi_start(closer_handle_t closer, __attribute__((unused)) void *arg) 
     ESP_RETURN_ON_ERROR(esp_wifi_set_storage(WIFI_STORAGE_RAM), TAG, "esp_wifi_set_storage");
     ESP_RETURN_ON_ERROR(esp_wifi_set_mode(GATEWAY_WIFI_MODE), TAG, "esp_wifi_set_mode");
 
-    ESP_RETURN_ON_ERROR(esp_event_handler_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &wifi_event_handler, NULL), TAG,
-                        "esp_event_handler_register");
-
-    TaskHandle_t xTaskToNotify = xTaskGetCurrentTaskHandle();
-
-    ESP_RETURN_ON_ERROR(
-        esp_event_handler_register(IP_EVENT, IP_EVENT_STA_GOT_IP, &handler_on_sta_got_ip, xTaskToNotify), TAG,
-        "esp_event_handler_register");
-
-    wifi_config_t wifi_config = {
-        .sta =
-            {
-                .ssid = GATEWAY_WIFI_SSID,
-                .password = GATEWAY_WIFI_PASSWORD,
-            },
-    };
-
-    ESP_LOGI(TAG, "Connecting to %s...", wifi_config.sta.ssid);
-    ESP_RETURN_ON_ERROR(esp_wifi_set_config(WIFI_IF_STA, &wifi_config), TAG, "esp_wifi_set_config");
+    ESP_RETURN_ON_ERROR(wifi_register_handlers(), TAG, "wifi_register_handlers");
+    ESP_RETURN_ON_ERROR(wifi_set_sta_config(), TAG, "esp_wifi_set_config");
 
     DEFER(esp_wifi_start(), closer, esp_wifi_stop);
 
