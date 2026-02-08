@@ -37,4 +37,21 @@ menu "ESP-NOW Gateway Configuration"
 		default "mydevice_instance"
 		help
 			Instance Name name to register with mDNS.
+
+    config ESPNOW_BROKER_URL
+        string "MQTT Broker URL"
+        default "mqtt://localhost:1883"
+        help
+            URL of the MQTT broker to which the gateway will connect.
+
+    config ESPNOW_BROKER_USERNAME
+        string "MQTT Broker Username"
+        default "mqtt_user"
+        help
+            Username for authenticating with the MQTT broker.
+    config ESPNOW_BROKER_PASSWORD
+        string "MQTT Broker Password"
+        default "mqtt_password"
+        help
+            Password for authenticating with the MQTT broker.
 endmenu

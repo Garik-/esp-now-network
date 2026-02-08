@@ -1,13 +1,11 @@
 #include "esp_check.h"
 #include "esp_err.h"
-#include "esp_http_server.h"
 #include "esp_log.h"
 #include "esp_mac.h"
-#include "mdns.h"
+#include "mqtt_client.h"
 #include "nvs_flash.h"
 
 static const char *TAG = "main_gateway";
-static httpd_handle_t s_server = NULL;
 
 #define CLOSER_IMPLEMENTATION
 #include "closer.h"
@@ -15,6 +13,8 @@ static httpd_handle_t s_server = NULL;
 #include "config.h"
 #include "espnow.h"
 #include "wifi.h"
+
+static esp_mqtt_client_handle_t s_client = NULL;
 
 __attribute__((cold)) static esp_err_t nvs_init() {
     esp_err_t ret = nvs_flash_init();
@@ -26,66 +26,88 @@ __attribute__((cold)) static esp_err_t nvs_init() {
     return ret;
 }
 
-__attribute__((cold)) static esp_err_t mdns_start() { // TODO: add error handling
-    ESP_RETURN_ON_ERROR(mdns_init(), TAG, "mdns_init failed");
-    // DEFER(mdns_free);
+#define WAIT_MQTT_CONNECTION_TIMEOUT_MS 10000
 
-    ESP_RETURN_ON_ERROR(mdns_hostname_set(GATEWAY_MDNS_NAME), TAG, "mdns_hostname_set");
-    ESP_LOGI(TAG, "mdns hostname set to: [%s]", GATEWAY_MDNS_NAME);
+static void esp_mqtt_connected_event_handler(void *arg, esp_event_base_t event_base, int32_t event_id,
+                                             void *event_data) {
+    if (unlikely(arg == NULL)) {
+        return;
+    }
 
-    ESP_RETURN_ON_ERROR(mdns_instance_name_set(GATEWAY_MDNS_INSTANCE_NAME), TAG,
-                        "mdns_instance_name_set"); // TODO: make configurable
-    ESP_RETURN_ON_ERROR(mdns_service_add(NULL, "_http", "_tcp", GATEWAY_HTTP_PORT, NULL, 0), TAG, "mdns_service_add");
+    if (unlikely(event_id != MQTT_EVENT_CONNECTED)) {
+        ESP_LOGW(TAG, "unexpected event_id: %d", event_id);
+        return;
+    }
 
-    return ESP_OK;
+    if (xPortInIsrContext()) {
+        BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+        xTaskNotifyFromISR((TaskHandle_t)arg, 0, eSetValueWithOverwrite, &xHigherPriorityTaskWoken);
+        if (xHigherPriorityTaskWoken) {
+            portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+        }
+    } else {
+        xTaskNotify((TaskHandle_t)arg, 0, eSetValueWithOverwrite);
+    }
 }
 
-static esp_err_t api_channel_get_handler(httpd_req_t *req) {
+__attribute__((cold)) static esp_err_t mqtt_app_start() {
 
-    uint8_t channel = wifi_get_channel();
+    esp_err_t err;
 
-    char resp[4];
-    int len = snprintf(resp, sizeof(resp), "%d", channel);
-    httpd_resp_set_type(req, "text/plain");
-    httpd_resp_send(req, resp, len);
+    esp_mqtt_client_config_t mqtt_cfg = {
+        .broker.address.uri = GATEWAY_BROKER_URL,
+        .credentials.username = GATEWAY_BROKER_USERNAME,
+        .credentials.authentication.password = GATEWAY_BROKER_PASSWORD,
+    };
 
-    return ESP_OK;
-}
+    TaskHandle_t xTaskToNotify = xTaskGetCurrentTaskHandle();
 
-static esp_err_t start_webserver() {
-    httpd_config_t config = HTTPD_DEFAULT_CONFIG();
+    s_client = esp_mqtt_client_init(&mqtt_cfg);
+    if (unlikely(s_client == NULL)) {
+        ESP_LOGE(TAG, "Failed to initialize MQTT client");
+        return ESP_FAIL;
+    }
 
-    config.server_port = GATEWAY_HTTP_PORT;
+    err =
+        esp_mqtt_client_register_event(s_client, MQTT_EVENT_CONNECTED, esp_mqtt_connected_event_handler, xTaskToNotify);
+    if (unlikely(err != ESP_OK)) {
+        ESP_LOGE(TAG, "Failed to register MQTT event handler: %s", esp_err_to_name(err));
+        esp_mqtt_client_destroy(s_client);
 
-    config.lru_purge_enable = true;
-    config.max_open_sockets = 4;
+        s_client = NULL;
+        return err;
+    }
 
-    config.recv_wait_timeout = 10;
-    config.send_wait_timeout = 10;
+    err = esp_mqtt_client_start(s_client);
 
-    config.keep_alive_enable = true;
+    if (err == ESP_OK) {
+        if (xTaskNotifyWait(pdFALSE, ULONG_MAX, NULL, pdMS_TO_TICKS(WAIT_MQTT_CONNECTION_TIMEOUT_MS)) == pdPASS) {
+            return ESP_OK;
+        }
 
-    config.stack_size = 6144;
-    config.max_uri_handlers = 8;
+        err = ESP_ERR_TIMEOUT;
+    }
 
-    config.task_priority = tskIDLE_PRIORITY + 3;
+    esp_mqtt_client_stop(s_client);
+    esp_mqtt_client_destroy(s_client);
 
-    ESP_LOGI(TAG, "starting server on port: '%d'", config.server_port);
-    ESP_RETURN_ON_ERROR(httpd_start(&s_server, &config), TAG, "httpd_start failed"); // TODO: add error handling
-    // DEFER(stop_webserver);
+    s_client = NULL;
 
-    static const httpd_uri_t api_channel_get = {
-        .uri = "/api/channel", .method = HTTP_GET, .handler = api_channel_get_handler}; // TODO: need static?
-    ESP_RETURN_ON_ERROR(httpd_register_uri_handler(s_server, &api_channel_get), TAG, "httpd register /api/channel");
-
-    return ESP_OK;
+    return err;
 }
 
 espnow_rx_handler_t handle(const espnow_rx_t *rx) {
-    char mac_str[27];
-    snprintf(mac_str, sizeof(mac_str), "/device/" MACSTR "", MAC2STR(rx->mac_addr));
+    if (s_client == NULL) {
+        ESP_LOGW(TAG, "mqtt client is not initialized");
+        return ESP_OK;
+    }
 
-    ESP_LOGI(TAG, "received data from %s, len: %d", mac_str, rx->len); // TODO: delete
+    char topic[27];
+    snprintf(topic, sizeof(topic), "/device/" MACSTR "", MAC2STR(rx->mac_addr));
+
+    int msg_id = esp_mqtt_client_publish(s_client, topic, (const char *)rx->data, rx->len, 0, 1);
+    ESP_LOGI(TAG, "publish message, topic=%s len=%d msg_id=%d", topic, rx->len, msg_id);
+
     return ESP_OK;
 }
 
@@ -93,9 +115,9 @@ esp_err_t app_run() {
     ESP_RETURN_ON_ERROR(nvs_init(), TAG, "nvs_init");
     ESP_RETURN_ON_ERROR(with_closer(wifi_start, NULL), TAG, "wifi_start");
     ESP_RETURN_ON_ERROR(with_closer(espnow_start, &handle), TAG, "espnow_start");
-    ESP_RETURN_ON_ERROR(wifi_connect(), TAG, "wifi_connect");
-    ESP_RETURN_ON_ERROR(mdns_start(), TAG, "mdns_start");
-    ESP_RETURN_ON_ERROR(start_webserver(), TAG, "httpd_start");
+    ESP_RETURN_ON_ERROR(wifi_connect(), TAG, "wifi_connect"); // TODO: add reconnect on disconnect
+
+    ESP_RETURN_ON_ERROR(mqtt_app_start(), TAG, "mqtt_app_start");
 
     return ESP_OK;
 }

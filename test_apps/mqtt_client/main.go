@@ -13,7 +13,6 @@ import (
 
 const (
 	broker            = "tcp://localhost:1883"
-	topic             = "go-mqtt/sample"
 	clientID          = "go-mqtt-client"
 	keepAliveDuration = 2 * time.Second
 	pingTimeout       = 1 * time.Second
@@ -26,8 +25,8 @@ var f = func(logger *slog.Logger) mqtt.MessageHandler {
 }
 
 func main() {
-	if len(os.Args) < 3 {
-		fmt.Println("Usage: go run main.go <user> <password>")
+	if len(os.Args) < 4 {
+		fmt.Println("Usage: go run main.go <user> <password> <topic>")
 		os.Exit(1)
 	}
 
@@ -66,7 +65,7 @@ func main() {
 		panic(token.Error())
 	}
 
-	if token := c.Subscribe(topic, 0, nil); token.Wait() && token.Error() != nil {
+	if token := c.Subscribe(os.Args[3], 0, nil); token.Wait() && token.Error() != nil {
 		fmt.Println(token.Error())
 		os.Exit(1)
 	}
@@ -75,7 +74,7 @@ func main() {
 	signal.Notify(sc, os.Interrupt, syscall.SIGTERM)
 	<-sc
 
-	if token := c.Unsubscribe(topic); token.Wait() && token.Error() != nil {
+	if token := c.Unsubscribe(os.Args[3]); token.Wait() && token.Error() != nil {
 		fmt.Println(token.Error())
 		os.Exit(1)
 	}
