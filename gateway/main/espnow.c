@@ -53,8 +53,7 @@ static void espnow_task(void *handle_fn) {
             vTaskDelete(NULL);
         }
 
-        if (xQueueReceive(s_event_queue, &rx, portMAX_DELAY) != pdTRUE) {
-            ESP_LOGE(TAG, "xQueueReceive failed");
+        if (xQueueReceive(s_event_queue, &rx, pdMS_TO_TICKS(MAXDELAY_MS)) != pdTRUE) {
             continue;
         }
 
