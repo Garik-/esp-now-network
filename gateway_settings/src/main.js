@@ -125,9 +125,8 @@ function createItem(menu) {
   const input = document.createElement('input');
   input.name = input.id = menu.key;
   input.required = true;
-  // input.placeholder = menu.default || '';
-  input.setAttribute('type', menu.type);
-  // input.type = menu.type;
+  input.type = menu.type;
+  input.type = menu.type;
 
   input.addEventListener('input', () => {
     if (input.matches(':invalid')) {
