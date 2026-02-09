@@ -31,29 +31,12 @@ class AuthSession {
 
 const auth = new AuthSession();
 
-function setValue(input, defaultValue = '') {
-  fetch(convertToPath(input.name), {
-    headers: {
-      Authorization: 'Basic ' + auth.token,
-    },
-  })
-    .then((response) => {
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      return response.text();
-    })
-    .then((text) => {
-      input.value = text;
-      cacheValues[input.name] = text;
-    })
-    .catch((err) => {
-      console.error(err);
-      input.value = defaultValue;
-    });
+async function setValue(initPromise, input, defaultValue = '') {
+  await initPromise;
+  input.value = cacheValues[input.id] ?? defaultValue;
 }
 
-function createItem(menu) {
+function createItem(initPromise, menu) {
   const div = document.createElement('div');
   div.className = 'field border label';
 
@@ -86,7 +69,7 @@ function createItem(menu) {
     input.max = menu.range[1];
   }
 
-  let i;
+  let i = '';
 
   if (menu.type === 'password') {
     div.classList.add('suffix');
@@ -95,7 +78,7 @@ function createItem(menu) {
     i.textContent = 'visibility';
   }
 
-  setValue(input, menu.default);
+  setValue(initPromise, input, menu.default);
 
   div.append(input, label, i, output);
 
@@ -111,7 +94,8 @@ function createHeader() {
   const backBtn = document.createElement('button');
   backBtn.className = 'circle transparent';
   backBtn.innerHTML = '<i>arrow_back</i>';
-  backBtn.addEventListener('click', () => {
+  backBtn.addEventListener('click', (e) => {
+    e.preventDefault();
     auth.clear();
     render();
   });
@@ -124,13 +108,23 @@ function createHeader() {
   saveBtn.className = 'transparent';
   saveBtn.textContent = 'SAVE';
   saveBtn.addEventListener('click', () => {
-    inputElements.forEach((input) => {
-      if (cacheValues[input.name] === input.value) {
-        return true;
+    const data = new FormData(document.getElementById('settings-form'));
+
+    for (var pair of data.entries()) {
+      if (cacheValues[pair[0]] === pair[1]) {
+        continue;
       }
 
-      console.log('value change', input.name);
-    });
+      fetch(convertToPath(pair[0]), {
+        method: 'POST',
+        headers: {
+          Authorization: 'Basic ' + auth.token,
+        },
+        body: pair[1],
+      });
+
+      console.log('value change', pair);
+    }
   });
 
   nav.append(backBtn, h6, saveBtn);
@@ -139,8 +133,9 @@ function createHeader() {
   document.body.prepend(header);
 }
 
-function createForm() {
+function createForm(initPromise) {
   const form = document.createElement('form');
+  form.id = 'settings-form';
 
   menuConfig.config.forEach((menu) => {
     if ('legend' in menu) {
@@ -150,7 +145,7 @@ function createForm() {
       fieldset.append(legend);
 
       menu.items.forEach((item) => {
-        fieldset.append(createItem(item));
+        fieldset.append(createItem(initPromise, item));
       });
 
       form.append(fieldset);
@@ -158,7 +153,7 @@ function createForm() {
       return true;
     }
 
-    form.append(createItem(menu));
+    form.append(createItem(initPromise, menu));
   });
 
   return form;
@@ -166,7 +161,29 @@ function createForm() {
 
 function editPage(mainEl) {
   createHeader();
-  mainEl.append(createForm());
+
+  const initPromise = (async () => {
+    const resp = await fetch('/settings.csv', {
+      headers: {
+        Authorization: 'Basic ' + auth.token,
+      },
+    });
+    if (!resp.ok) {
+      throw new Error(`HTTP ${resp.status}`);
+    }
+
+    const text = await resp.text();
+
+    for (const line of text.split('\n')) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith('#')) continue;
+
+      const [key, value] = trimmed.split('=', 2);
+      cacheValues[key] = value;
+    }
+  })();
+
+  mainEl.append(createForm(initPromise));
 }
 
 function loginTemplate() {
@@ -187,7 +204,27 @@ function loginPage(mainEl) {
     const data = new FormData(e.target);
     auth.credentials(data.get('username'), data.get('password'));
 
-    render();
+    fetch('/auth/check', {
+      headers: {
+        Authorization: 'Basic ' + auth.token,
+      },
+    })
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        return response.text();
+      })
+      .then(() => {
+        render();
+      })
+      .catch((err) => {
+        console.error(err);
+        auth.clear();
+        document
+          .getElementById('password')
+          .parentElement.classList.add('invalid');
+      });
   });
 
   article.append(form);
@@ -211,6 +248,10 @@ function render() {
   }
 
   document.body.append(main);
+
+  if (typeof ui === 'function') {
+    ui();
+  }
 }
 
 render();

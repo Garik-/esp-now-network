@@ -22,6 +22,14 @@ typedef struct {
 static settings_t s_settings;
 static bool s_settings_loaded = false;
 
+static setting_entry_t s_entries[] = {
+    {.key = "wifi.ssid", .buf = s_settings.wifi_ssid, .buf_len = sizeof(s_settings.wifi_ssid)},
+    {.key = "wifi.password", .buf = s_settings.wifi_password, .buf_len = sizeof(s_settings.wifi_password)},
+    {.key = "mqtt.uri", .buf = s_settings.mqtt_uri, .buf_len = sizeof(s_settings.mqtt_uri)},
+    {.key = "mqtt.user", .buf = s_settings.mqtt_user, .buf_len = sizeof(s_settings.mqtt_user)},
+    {.key = "mqtt.password", .buf = s_settings.mqtt_password, .buf_len = sizeof(s_settings.mqtt_password)},
+};
+
 static void settings_apply_defaults(settings_t *out) {
     strlcpy(out->wifi_ssid, GATEWAY_WIFI_SSID, sizeof(out->wifi_ssid));
     strlcpy(out->wifi_password, GATEWAY_WIFI_PASSWORD, sizeof(out->wifi_password));
@@ -31,21 +39,40 @@ static void settings_apply_defaults(settings_t *out) {
 }
 
 static setting_entry_t *settings_find_entry(const char *key) {
-    static setting_entry_t entries[] = {
-        {.key = "wifi.ssid", .buf = s_settings.wifi_ssid, .buf_len = sizeof(s_settings.wifi_ssid)},
-        {.key = "wifi.password", .buf = s_settings.wifi_password, .buf_len = sizeof(s_settings.wifi_password)},
-        {.key = "mqtt.uri", .buf = s_settings.mqtt_uri, .buf_len = sizeof(s_settings.mqtt_uri)},
-        {.key = "mqtt.user", .buf = s_settings.mqtt_user, .buf_len = sizeof(s_settings.mqtt_user)},
-        {.key = "mqtt.password", .buf = s_settings.mqtt_password, .buf_len = sizeof(s_settings.mqtt_password)},
-    };
-
-    for (size_t i = 0; i < sizeof(entries) / sizeof(entries[0]); i++) {
-        if (strcmp(entries[i].key, key) == 0) {
-            return &entries[i];
+    for (size_t i = 0; i < sizeof(s_entries) / sizeof(s_entries[0]); i++) {
+        if (strcmp(s_entries[i].key, key) == 0) {
+            return &s_entries[i];
         }
     }
 
     return NULL;
+}
+
+esp_err_t settings_to_csv(char *out, size_t out_len, size_t *out_size) {
+    if (out == NULL || out_len == 0) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    const settings_t *s = settings_get();
+
+    int n = snprintf(out, out_len,
+                     "wifi.ssid=%s\n"
+                     "wifi.password=%s\n"
+                     "mqtt.uri=%s\n"
+                     "mqtt.user=%s\n"
+                     "mqtt.password=%s\n",
+                     s->wifi_ssid, s->wifi_password, s->mqtt_uri, s->mqtt_user, s->mqtt_password);
+
+    if (n < 0) {
+        return ESP_FAIL;
+    }
+    if ((size_t)n >= out_len) {
+        return ESP_ERR_INVALID_SIZE;
+    }
+    if (out_size != NULL) {
+        *out_size = (size_t)n;
+    }
+    return ESP_OK;
 }
 
 static esp_err_t settings_load_from_nvs(void) {
@@ -58,13 +85,8 @@ static esp_err_t settings_load_from_nvs(void) {
         return err;
     }
 
-    const char *keys[] = {"wifi.ssid", "wifi.password", "mqtt.uri", "mqtt.user", "mqtt.password"};
-    for (size_t i = 0; i < sizeof(keys) / sizeof(keys[0]); i++) {
-        setting_entry_t *entry = settings_find_entry(keys[i]);
-        if (entry == NULL) {
-            continue;
-        }
-
+    for (size_t i = 0; i < sizeof(s_entries) / sizeof(s_entries[0]); i++) {
+        setting_entry_t *entry = &s_entries[i];
         size_t len = entry->buf_len;
         err = nvs_get_str(nvs, entry->key, entry->buf, &len);
         if (err == ESP_ERR_NVS_NOT_FOUND) {

@@ -18,17 +18,17 @@ export const menuConfig = Object.freeze({
           default: 'mypassword',
           help: 'WiFi password (WPA or WPA2) for the device to use. Can be left blank if the network has no security set',
         },
-        {
+        /*{
           key: 'wifi.channel',
           title: 'Channel',
           type: 'number',
           default: 6,
           range: [0, 14],
           help: 'The channel on which sending and receiving ESPNOW data',
-        },
+        },*/
       ],
     },
-    {
+    /*{
       legend: 'HTTP',
       items: [
         {
@@ -55,27 +55,27 @@ export const menuConfig = Object.freeze({
           help: 'Password for Basic Auth on HTTP POST config endpoints. Leave blank to disable Basic Auth',
         },
       ],
-    },
+    },*/
     {
       legend: 'MQTT',
       items: [
         {
           key: 'mqtt.uri',
-          title: 'MQTT Broker URL',
+          title: 'URI',
           type: 'url',
           default: 'mqtt://localhost:1883',
           help: 'URL of the MQTT broker to which the gateway will connect',
         },
         {
           key: 'mqtt.user',
-          title: 'MQTT Broker Username',
+          title: 'Username',
           type: 'text',
           default: 'mqtt_user',
           help: 'Username for authenticating with the MQTT broker',
         },
         {
           key: 'mqtt.password',
-          title: 'MQTT Broker Password',
+          title: 'Password',
           type: 'password',
           default: 'mqtt_password',
           help: 'Password for authenticating with the MQTT broker',

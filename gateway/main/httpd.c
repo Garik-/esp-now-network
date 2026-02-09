@@ -21,8 +21,7 @@ static esp_err_t send_text(httpd_req_t *req, const char *text) {
 
 static esp_err_t send_unauthorized(httpd_req_t *req) {
     httpd_resp_set_status(req, "401 Unauthorized");
-    httpd_resp_set_hdr(req, "WWW-Authenticate", "Basic realm=\"config\"");
-    return httpd_resp_send(req, "auth required", HTTPD_RESP_USE_STRLEN);
+    return httpd_resp_send(req, NULL, 0);
 }
 
 static esp_err_t require_basic_auth(httpd_req_t *req) {
@@ -97,11 +96,6 @@ static esp_err_t handle_get(httpd_req_t *req) {
         return ESP_FAIL;
     }
 
-    if (strcmp(key, "wifi.password") == 0 || strcmp(key, "mqtt.password") == 0) {
-        httpd_resp_send_err(req, HTTPD_403_FORBIDDEN, "password read not allowed");
-        return ESP_FAIL;
-    }
-
     const char *value = settings_get_value(key);
     if (value == NULL) {
         httpd_resp_send_err(req, HTTPD_404_NOT_FOUND, "unknown key");
@@ -157,7 +151,7 @@ static esp_err_t handle_post(httpd_req_t *req) {
         return err;
     }
 
-    return send_text(req, "ok");
+    return httpd_resp_send(req, NULL, 0);
 }
 
 static esp_err_t handle_root(httpd_req_t *req) {
@@ -176,10 +170,28 @@ static esp_err_t handle_auth_check(httpd_req_t *req) {
     if (require_basic_auth(req) != ESP_OK) {
         return ESP_FAIL;
     }
-    return send_text(req, "ok");
+    return httpd_resp_send(req, NULL, 0);
+}
+
+static esp_err_t handle_settings_csv(httpd_req_t *req) {
+    if (require_basic_auth(req) != ESP_OK) {
+        return ESP_FAIL;
+    }
+
+    char buf[512];
+    size_t out_size = 0;
+    esp_err_t err = settings_to_csv(buf, sizeof(buf), &out_size);
+    if (err != ESP_OK) {
+        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "csv failed");
+        return err;
+    }
+
+    httpd_resp_set_type(req, "text/csv; charset=utf-8");
+    return httpd_resp_send(req, buf, out_size);
 }
 
 static esp_err_t register_config_endpoint(httpd_handle_t server, const char *uri, const char *key) {
+    /*
     httpd_uri_t get_uri = {
         .uri = uri,
         .method = HTTP_GET,
@@ -187,6 +199,7 @@ static esp_err_t register_config_endpoint(httpd_handle_t server, const char *uri
         .user_ctx = (void *)key,
     };
     ESP_RETURN_ON_ERROR(httpd_register_uri_handler(server, &get_uri), TAG, "httpd_register_uri_handler");
+    */
 
     httpd_uri_t post_uri = {
         .uri = uri,
@@ -222,6 +235,14 @@ esp_err_t httpd_start_server(void) {
         .user_ctx = NULL,
     };
     ESP_RETURN_ON_ERROR(httpd_register_uri_handler(server, &auth_check), TAG, "httpd_register_uri_handler");
+
+    httpd_uri_t settings_csv = {
+        .uri = "/settings.csv",
+        .method = HTTP_GET,
+        .handler = handle_settings_csv,
+        .user_ctx = NULL,
+    };
+    ESP_RETURN_ON_ERROR(httpd_register_uri_handler(server, &settings_csv), TAG, "httpd_register_uri_handler");
 
     ESP_RETURN_ON_ERROR(register_config_endpoint(server, "/config/wifi/ssid", "wifi.ssid"), TAG, "register_endpoint");
     ESP_RETURN_ON_ERROR(register_config_endpoint(server, "/config/wifi/password", "wifi.password"), TAG,
