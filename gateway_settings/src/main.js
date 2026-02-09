@@ -107,7 +107,8 @@ function createHeader() {
   const saveBtn = document.createElement('button');
   saveBtn.className = 'transparent';
   saveBtn.textContent = 'SAVE';
-  saveBtn.addEventListener('click', () => {
+  saveBtn.addEventListener('click', (e) => {
+    e.preventDefault();
     const data = new FormData(document.getElementById('settings-form'));
 
     for (var pair of data.entries()) {
