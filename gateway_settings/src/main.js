@@ -1,93 +1,7 @@
 import './style.css';
 
-const menuConfig = Object.freeze({
-  menu: 'Settings',
-  config: [
-    {
-      legend: 'Wi-Fi',
-      items: [
-        {
-          key: 'wifi.ssid',
-          title: 'SSID',
-          type: 'text',
-          default: 'myssid',
-          help: 'SSID (network name) for the device to connect to',
-        },
-        {
-          key: 'wifi.password',
-          title: 'Password',
-          type: 'password',
-          default: 'mypassword',
-          help: 'WiFi password (WPA or WPA2) for the device to use. Can be left blank if the network has no security set',
-        },
-        {
-          key: 'wifi.channel',
-          title: 'Channel',
-          type: 'number',
-          default: 6,
-          range: [0, 14],
-          help: 'The channel on which sending and receiving ESPNOW data',
-        },
-      ],
-    },
-    {
-      legend: 'HTTP',
-      items: [
-        {
-          key: 'http.port',
-          title: 'Server Port',
-          type: 'number',
-          default: 80,
-          range: [1, 65535],
-          help: 'Port number for the HTTP server',
-        },
+import { menuConfig } from './menuconfig';
 
-        {
-          key: 'http.auth.user',
-          title: 'Username',
-          type: 'text',
-          default: '',
-          help: 'Username for Basic Auth on HTTP POST config endpoints. Leave blank to disable Basic Auth',
-        },
-        {
-          key: 'http.auth.password',
-          title: 'Password',
-          type: 'password',
-          default: '',
-          help: 'Password for Basic Auth on HTTP POST config endpoints. Leave blank to disable Basic Auth',
-        },
-      ],
-    },
-    {
-      legend: 'MQTT',
-      items: [
-        {
-          key: 'mqtt.uri',
-          title: 'MQTT Broker URL',
-          type: 'url',
-          default: 'mqtt://localhost:1883',
-          help: 'URL of the MQTT broker to which the gateway will connect',
-        },
-        {
-          key: 'mqtt.user',
-          title: 'MQTT Broker Username',
-          type: 'text',
-          default: 'mqtt_user',
-          help: 'Username for authenticating with the MQTT broker',
-        },
-        {
-          key: 'mqtt.password',
-          title: 'MQTT Broker Password',
-          type: 'password',
-          default: 'mqtt_password',
-          help: 'Password for authenticating with the MQTT broker',
-        },
-      ],
-    },
-  ],
-});
-
-const inputElements = [];
 const cacheValues = {};
 
 function convertToPath(str) {
@@ -159,7 +73,7 @@ function createItem(menu) {
     if (input.matches(':invalid')) {
       div.classList.add('invalid');
       output.classList.add('invalid');
-      output.textContent = 'That doesn\’t look right';
+      output.textContent = "That doesn't look right";
     } else {
       div.classList.remove('invalid');
       output.classList.remove('invalid');
@@ -183,16 +97,7 @@ function createItem(menu) {
 
   setValue(input, menu.default);
 
-  div.appendChild(input);
-  div.appendChild(label);
-
-  if (i) {
-    div.appendChild(i);
-  }
-
-  div.appendChild(output);
-
-  inputElements.push(input);
+  div.append(input, label, i, output);
 
   return div;
 }
@@ -200,28 +105,24 @@ function createItem(menu) {
 function createHeader() {
   const header = document.createElement('header');
   header.id = 'main-header';
+
   const nav = document.createElement('nav');
+
   const backBtn = document.createElement('button');
   backBtn.className = 'circle transparent';
   backBtn.innerHTML = '<i>arrow_back</i>';
-
   backBtn.addEventListener('click', () => {
     auth.clear();
     render();
   });
 
-  nav.appendChild(backBtn);
-
   const h6 = document.createElement('h6');
   h6.textContent = menuConfig.menu;
   h6.className = 'max';
 
-  nav.appendChild(h6);
-
   const saveBtn = document.createElement('button');
   saveBtn.className = 'transparent';
   saveBtn.textContent = 'SAVE';
-
   saveBtn.addEventListener('click', () => {
     inputElements.forEach((input) => {
       if (cacheValues[input.name] === input.value) {
@@ -232,37 +133,44 @@ function createHeader() {
     });
   });
 
-  nav.appendChild(saveBtn);
-
-  header.appendChild(nav);
+  nav.append(backBtn, h6, saveBtn);
+  header.append(nav);
 
   document.body.prepend(header);
 }
 
-function createForm(mainEl) {
+function createForm() {
+  const form = document.createElement('form');
+
   menuConfig.config.forEach((menu) => {
     if ('legend' in menu) {
       const fieldset = document.createElement('fieldset');
       const legend = document.createElement('legend');
       legend.textContent = menu.legend;
-      fieldset.appendChild(legend);
+      fieldset.append(legend);
 
       menu.items.forEach((item) => {
-        fieldset.appendChild(createItem(item));
+        fieldset.append(createItem(item));
       });
 
-      mainEl.appendChild(fieldset);
+      form.append(fieldset);
 
       return true;
     }
 
-    mainEl.appendChild(createItem(menu));
+    form.append(createItem(menu));
   });
+
+  return form;
 }
 
 function editPage(mainEl) {
   createHeader();
-  createForm(mainEl);
+  mainEl.append(createForm());
+}
+
+function loginTemplate() {
+  return `<div class="s12"><h5>Welcome back!</h5></div><div class="s12"><div class="field label border"><input name="username" id="username" required type="text"><label for="username">Username</label></div><div class="field label suffix border"><input name="password" id="password" required type="password"><label for="password">Password</label><i class="front">visibility</i></div></div><div class="s12"><button class="responsive small-round large no-side" type="submit">Sign in</button></div>`;
 }
 
 function loginPage(mainEl) {
@@ -272,26 +180,7 @@ function loginPage(mainEl) {
 
   const form = document.createElement('form');
   form.className = 'grid large-space';
-  form.innerHTML = `<div class="s12">
-                <h5>Welcome back!</h5>
-            </div>
-            <div class="s12">
-                <div class="field label border">
-                    <input name="username" id="username" required type="text">
-                    <label for="username">Username</label>
-                </div>
-
-                <div class="field label suffix border">
-                    <input name="password" id="password" required type="password">
-                    <label for="password">Password</label>
-                    <i class="front">visibility</i>
-                </div>
-            </div>
-            <div class="s12">
-                <button class="responsive small-round large no-side" type="submit">Sign in</button>
-            </div>
-            
-            `;
+  form.innerHTML = loginTemplate();
 
   form.addEventListener('submit', (e) => {
     e.preventDefault();
@@ -301,23 +190,27 @@ function loginPage(mainEl) {
     render();
   });
 
-  article.appendChild(form);
+  article.append(form);
 
-  mainEl.appendChild(article);
+  mainEl.append(article);
 }
 
 function render() {
+  for (const key in cacheValues) delete cacheValues[key];
+
   document.body.replaceChildren();
   const main = document.createElement('main');
   main.className = 'responsive';
 
   if (!auth.token) {
+    document.body.classList.add('animated-gradient');
     loginPage(main);
   } else {
+    document.body.classList.remove('animated-gradient');
     editPage(main);
   }
 
-  document.body.appendChild(main);
+  document.body.append(main);
 }
 
 render();
