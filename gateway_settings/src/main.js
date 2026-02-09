@@ -154,7 +154,6 @@ function createItem(menu) {
   input.name = input.id = menu.key;
   input.required = true;
   input.type = menu.type;
-  input.type = menu.type;
 
   input.addEventListener('input', () => {
     if (input.matches(':invalid')) {
