@@ -1,11 +1,13 @@
 #include "httpd.h"
 
 #include <ctype.h>
+#include <stdio.h>
 #include <string.h>
 
 #include "esp_check.h"
 #include "esp_http_server.h"
 #include "esp_log.h"
+#include "mbedtls/base64.h"
 
 #include "config.h"
 #include "settings.h"
@@ -15,6 +17,56 @@ static const char *const TAG = "httpd";
 static esp_err_t send_text(httpd_req_t *req, const char *text) {
     httpd_resp_set_type(req, "text/plain; charset=utf-8");
     return httpd_resp_send(req, text, HTTPD_RESP_USE_STRLEN);
+}
+
+static esp_err_t send_unauthorized(httpd_req_t *req) {
+    httpd_resp_set_status(req, "401 Unauthorized");
+    httpd_resp_set_hdr(req, "WWW-Authenticate", "Basic realm=\"config\"");
+    return httpd_resp_send(req, "auth required", HTTPD_RESP_USE_STRLEN);
+}
+
+static esp_err_t require_basic_auth(httpd_req_t *req) {
+    const char *user = GATEWAY_HTTP_AUTH_USER;
+    const char *pass = GATEWAY_HTTP_AUTH_PASSWORD;
+    if (user[0] == '\0' && pass[0] == '\0') {
+        return ESP_OK;
+    }
+
+    size_t hdr_len = httpd_req_get_hdr_value_len(req, "Authorization");
+    if (hdr_len == 0 || hdr_len >= 128) {
+        return send_unauthorized(req);
+    }
+
+    char hdr[128];
+    if (httpd_req_get_hdr_value_str(req, "Authorization", hdr, sizeof(hdr)) != ESP_OK) {
+        return send_unauthorized(req);
+    }
+
+    const char *prefix = "Basic ";
+    size_t prefix_len = strlen(prefix);
+    if (strncmp(hdr, prefix, prefix_len) != 0) {
+        return send_unauthorized(req);
+    }
+
+    const char *b64 = hdr + prefix_len;
+    size_t b64_len = strlen(b64);
+    unsigned char decoded[128];
+    size_t decoded_len = 0;
+    if (mbedtls_base64_decode(decoded, sizeof(decoded) - 1, &decoded_len, (const unsigned char *)b64, b64_len) != 0) {
+        return send_unauthorized(req);
+    }
+    decoded[decoded_len] = '\0';
+
+    char expected[128];
+    if (snprintf(expected, sizeof(expected), "%s:%s", user, pass) <= 0) {
+        return send_unauthorized(req);
+    }
+
+    if (strcmp((const char *)decoded, expected) != 0) {
+        return send_unauthorized(req);
+    }
+
+    return ESP_OK;
 }
 
 static char *trim_whitespace(char *s) {
@@ -41,6 +93,10 @@ static esp_err_t handle_get(httpd_req_t *req) {
         return ESP_FAIL;
     }
 
+    if (require_basic_auth(req) != ESP_OK) {
+        return ESP_FAIL;
+    }
+
     if (strcmp(key, "wifi.password") == 0 || strcmp(key, "mqtt.password") == 0) {
         httpd_resp_send_err(req, HTTPD_403_FORBIDDEN, "password read not allowed");
         return ESP_FAIL;
@@ -59,6 +115,10 @@ static esp_err_t handle_post(httpd_req_t *req) {
     const char *key = (const char *)req->user_ctx;
     if (key == NULL) {
         httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "missing key");
+        return ESP_FAIL;
+    }
+
+    if (require_basic_auth(req) != ESP_OK) {
         return ESP_FAIL;
     }
 
@@ -101,17 +161,22 @@ static esp_err_t handle_post(httpd_req_t *req) {
 }
 
 static esp_err_t handle_root(httpd_req_t *req) {
-    const char *body = "Gateway config endpoints:\n"
-                       "GET  /config/wifi/ssid\n"
-                       "POST /config/wifi/ssid\n"
-                       "POST /config/wifi/password\n"
-                       "GET  /config/mqtt/uri\n"
-                       "POST /config/mqtt/uri\n"
-                       "GET  /config/mqtt/user\n"
-                       "POST /config/mqtt/user\n"
-                       "POST /config/mqtt/password\n";
+    httpd_resp_set_type(req, "text/html; charset=utf-8");
+    httpd_resp_set_hdr(req, "Content-Encoding", "gzip");
+    httpd_resp_set_hdr(req, "Cache-Control", "no-cache, must-revalidate");
 
-    return send_text(req, body);
+    extern const unsigned char index_html_start[] asm("_binary_index_html_gz_start");
+    extern const unsigned char index_html_end[] asm("_binary_index_html_gz_end");
+    const size_t index_html_size = (index_html_end - index_html_start);
+
+    return httpd_resp_send(req, (const char *)index_html_start, index_html_size);
+}
+
+static esp_err_t handle_auth_check(httpd_req_t *req) {
+    if (require_basic_auth(req) != ESP_OK) {
+        return ESP_FAIL;
+    }
+    return send_text(req, "ok");
 }
 
 static esp_err_t register_config_endpoint(httpd_handle_t server, const char *uri, const char *key) {
@@ -149,6 +214,14 @@ esp_err_t httpd_start_server(void) {
         .user_ctx = NULL,
     };
     ESP_RETURN_ON_ERROR(httpd_register_uri_handler(server, &root), TAG, "httpd_register_uri_handler");
+
+    httpd_uri_t auth_check = {
+        .uri = "/auth/check",
+        .method = HTTP_GET,
+        .handler = handle_auth_check,
+        .user_ctx = NULL,
+    };
+    ESP_RETURN_ON_ERROR(httpd_register_uri_handler(server, &auth_check), TAG, "httpd_register_uri_handler");
 
     ESP_RETURN_ON_ERROR(register_config_endpoint(server, "/config/wifi/ssid", "wifi.ssid"), TAG, "register_endpoint");
     ESP_RETURN_ON_ERROR(register_config_endpoint(server, "/config/wifi/password", "wifi.password"), TAG,

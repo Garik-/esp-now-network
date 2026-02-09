@@ -26,6 +26,20 @@ menu "ESP-NOW Gateway Configuration"
 		help
 			Port number for the HTTP server.
 
+    config ESPNOW_HTTP_AUTH_USER
+        string "HTTP Basic Auth User"
+        default ""
+        help
+            Username for Basic Auth on HTTP POST config endpoints.
+            Leave blank to disable Basic Auth.
+
+    config ESPNOW_HTTP_AUTH_PASSWORD
+        string "HTTP Basic Auth Password"
+        default ""
+        help
+            Password for Basic Auth on HTTP POST config endpoints.
+            Leave blank to disable Basic Auth.
+
 	config ESPNOW_MDNS_NAME
 		string "mDNS Name"
 		default "mydevice"
