@@ -231,6 +231,7 @@ esp_err_t httpd_start_server(void) {
     ESP_RETURN_ON_ERROR(register_config_endpoint(server, "/config/mqtt/password", "mqtt.password"), TAG,
                         "register_endpoint");
 
-    ESP_LOGI(TAG, "HTTP server started on port %d", config.server_port);
+    ESP_LOGI(TAG, "HTTP server started, port=%d auth.user=%s auth.password=%s", config.server_port,
+             GATEWAY_HTTP_AUTH_USER, GATEWAY_HTTP_AUTH_PASSWORD);
     return ESP_OK;
 }
