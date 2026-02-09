@@ -7,9 +7,11 @@
         "dev": "vite",
         "build": "vite build",
         "postbuild": "node ./scripts/compress.mjs",
-        "preview": "vite preview"
+        "preview": "vite preview",
+        "format": "prettier --write ./src"
     },
     "devDependencies": {
+        "prettier": "^3.8.1",
         "vite": "^7.2.4",
         "vite-plugin-simple-html": "^1.1.0",
         "vite-plugin-singlefile": "^2.3.0"
