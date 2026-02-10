@@ -1,7 +1,8 @@
 import Handler from '../components/header';
 import Form from '../components/form';
+import { SETTINGS_URL, FORM_ID } from '../const';
 
-const FORM_ID = 'settings-form';
+const cacheValues = {};
 
 function toast(text, timeout = 3000) {
   const toastEl = document.getElementById('toast');
@@ -17,44 +18,32 @@ function saveHandler(auth) {
   return function (e) {
     e.preventDefault();
     const data = new FormData(document.getElementById(FORM_ID));
-    const promises = [];
+    let csv = '';
 
     for (var pair of data.entries()) {
       if (cacheValues[pair[0]] === pair[1]) {
         continue;
       }
 
-      promises.push(
-        fetch(convertToPath(pair[0]), {
-          // TODO: это не правильно нужен 2 промис который на response
-          method: 'POST',
-          headers: {
-            Authorization: 'Basic ' + auth.token,
-          },
-          body: pair[1],
-        })
-      );
-
+      csv += pair[0] + '=' + pair[1] + '\n';
       console.log('value change', pair);
     }
 
-    if (promises.length == 0) {
+    if (csv.length === 0) {
       toast('No changes');
-    } else {
-      Promise.all(promises).then((responses) => {
-        if (responses.every((r) => r.ok)) {
-          toast('Changes saved successfully');
-        }
-      });
+      return;
     }
+
+    fetch(SETTINGS_URL, {
+      method: 'POST',
+      headers: auth.headers(),
+      body: csv,
+    }).then((response) => {
+      if (response.ok) {
+        toast('Changes saved successfully');
+      }
+    });
   };
-}
-
-const cacheValues = {};
-
-function convertToPath(str) {
-  const parts = str.split('.');
-  return '/config/' + parts.join('/');
 }
 
 async function setValue(initPromise, input, defaultValue = '') {
@@ -72,10 +61,8 @@ export default function ({ main, auth, backHandler }) {
   const initPromise = (async () => {
     for (const key in cacheValues) delete cacheValues[key];
 
-    const resp = await fetch('/settings.csv', {
-      headers: {
-        Authorization: 'Basic ' + auth.token,
-      },
+    const resp = await fetch(SETTINGS_URL, {
+      headers: auth.headers(),
     });
     if (!resp.ok) {
       throw new Error(`HTTP ${resp.status}`);
@@ -96,6 +83,9 @@ export default function ({ main, auth, backHandler }) {
   toast.className = 'snackbar';
   toast.id = 'toast';
 
-  main.append(Form({ initPromise, id: FORM_ID, setValue }));
+  const reset = document.createElement('button')
+  reset.textContent='Reset to Factory Settings';
+
+  main.append(Form({ initPromise, id: FORM_ID, setValue }), reset);
   document.body.append(toast);
 }

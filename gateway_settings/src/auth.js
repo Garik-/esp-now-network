@@ -13,6 +13,11 @@ export class AuthSession {
     return sessionStorage.getItem(this.key);
   }
 
+  headers() {
+    const token = this.token;
+    return token ? { Authorization: `Basic ${token}` } : {};
+  }
+
   clear() {
     return sessionStorage.removeItem(this.key);
   }

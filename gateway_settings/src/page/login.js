@@ -1,3 +1,5 @@
+import { AUTH_URL } from '../const';
+
 function loginTemplate() {
   return `<div class="s12"><h5>Welcome back!</h5></div><div class="s12"><div class="field label border"><input name="username" id="username" required type="text"><label for="username">Username</label></div><div class="field label suffix border"><input name="password" id="password" required type="password"><label for="password">Password</label><i class="front">visibility</i></div></div><div class="s12"><button class="responsive small-round large no-side" type="submit">Sign in</button></div>`;
 }
@@ -20,10 +22,8 @@ export default function ({ main, auth, resolve }) {
     const data = new FormData(e.target);
     auth.credentials(data.get('username'), data.get('password'));
 
-    fetch('/auth/check', {
-      headers: {
-        Authorization: 'Basic ' + auth.token,
-      },
+    fetch(AUTH_URL, {
+      headers: auth.headers(),
     })
       .then((response) => {
         if (!response.ok) {
