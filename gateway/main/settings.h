@@ -24,3 +24,4 @@ esp_err_t settings_set(const char *key, const char *value);
 esp_err_t settings_clear(const char *key);
 const char *settings_get_value(const char *key);
 esp_err_t settings_to_csv(char *out, size_t out_len, size_t *out_size);
+esp_err_t settings_parse_from_csv(const char *csv, size_t csv_len);

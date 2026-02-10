@@ -48,6 +48,19 @@ static setting_entry_t *settings_find_entry(const char *key) {
     return NULL;
 }
 
+#define SETTINGS_MAX_VALUE_LEN (sizeof(s_settings.mqtt_uri))
+
+static setting_entry_t *settings_find_entry_len(const char *key, size_t key_len) {
+    for (size_t i = 0; i < sizeof(s_entries) / sizeof(s_entries[0]); i++) {
+        const char *entry_key = s_entries[i].key;
+        if (strlen(entry_key) == key_len && memcmp(entry_key, key, key_len) == 0) {
+            return &s_entries[i];
+        }
+    }
+
+    return NULL;
+}
+
 esp_err_t settings_to_csv(char *out, size_t out_len, size_t *out_size) {
     if (out == NULL || out_len == 0) {
         return ESP_ERR_INVALID_ARG;
@@ -72,6 +85,70 @@ esp_err_t settings_to_csv(char *out, size_t out_len, size_t *out_size) {
     if (out_size != NULL) {
         *out_size = (size_t)n;
     }
+    return ESP_OK;
+}
+
+esp_err_t settings_parse_from_csv(const char *csv, size_t csv_len) {
+    if (csv == NULL || csv_len == 0) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    if (!s_settings_loaded) {
+        settings_init();
+    }
+
+    const char *p = csv;
+    size_t remaining = csv_len;
+
+    char value_buf[SETTINGS_MAX_VALUE_LEN];
+
+    while (remaining > 0) {
+        const char *line_end = memchr(p, '\n', remaining);
+        size_t line_len = line_end ? (size_t)(line_end - p) : remaining;
+        if (line_len > 0 && p[line_len - 1] == '\r') {
+            line_len--;
+        }
+        if (line_len == 0) {
+            if (line_end == NULL) {
+                break;
+            }
+            p = line_end + 1;
+            remaining = csv_len - (size_t)(p - csv);
+            continue;
+        }
+
+        const char *eq = memchr(p, '=', line_len);
+        if (eq == NULL) {
+            return ESP_ERR_INVALID_ARG;
+        }
+        size_t key_len = (size_t)(eq - p);
+        size_t val_len = line_len - key_len - 1;
+        if (key_len == 0) {
+            return ESP_ERR_INVALID_ARG;
+        }
+
+        setting_entry_t *entry = settings_find_entry_len(p, key_len);
+        if (entry == NULL) {
+            return ESP_ERR_INVALID_ARG;
+        }
+        if (entry->buf_len > SETTINGS_MAX_VALUE_LEN || val_len >= entry->buf_len) {
+            return ESP_ERR_INVALID_SIZE;
+        }
+
+        memcpy(value_buf, eq + 1, val_len);
+        value_buf[val_len] = '\0';
+
+        esp_err_t err = settings_set(entry->key, value_buf);
+        if (err != ESP_OK) {
+            return err;
+        }
+
+        if (line_end == NULL) {
+            break;
+        }
+        p = line_end + 1;
+        remaining = csv_len - (size_t)(p - csv);
+    }
+
     return ESP_OK;
 }
 
