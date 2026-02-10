@@ -3,25 +3,49 @@ import Form from '../components/form';
 
 const FORM_ID = 'settings-form';
 
+function toast(text, timeout = 3000) {
+  const toastEl = document.getElementById('toast');
+
+  toastEl.textContent = text;
+  toastEl.classList.add('active');
+  setTimeout(() => {
+    toastEl.classList.remove('active');
+  }, timeout);
+}
+
 function saveHandler(auth) {
   return function (e) {
     e.preventDefault();
     const data = new FormData(document.getElementById(FORM_ID));
+    const promises = [];
 
     for (var pair of data.entries()) {
       if (cacheValues[pair[0]] === pair[1]) {
         continue;
       }
 
-      fetch(convertToPath(pair[0]), {
-        method: 'POST',
-        headers: {
-          Authorization: 'Basic ' + auth.token,
-        },
-        body: pair[1],
-      });
+      promises.push(
+        fetch(convertToPath(pair[0]), {
+          // TODO: это не правильно нужен 2 промис который на response
+          method: 'POST',
+          headers: {
+            Authorization: 'Basic ' + auth.token,
+          },
+          body: pair[1],
+        })
+      );
 
       console.log('value change', pair);
+    }
+
+    if (promises.length == 0) {
+      toast('No changes');
+    } else {
+      Promise.all(promises).then((responses) => {
+        if (responses.every((r) => r.ok)) {
+          toast('Changes saved successfully');
+        }
+      });
     }
   };
 }
@@ -68,5 +92,10 @@ export default function ({ main, auth, backHandler }) {
     }
   })();
 
+  const toast = document.createElement('div');
+  toast.className = 'snackbar';
+  toast.id = 'toast';
+
   main.append(Form({ initPromise, id: FORM_ID, setValue }));
+  document.body.append(toast);
 }
