@@ -2,8 +2,8 @@ import './style.css';
 
 import { AuthSession } from './auth';
 
-import loginPage from './page/login';
-import editPage from './page/edit';
+import LoginPage from './page/login';
+import EditPage from './page/edit';
 
 const auth = new AuthSession();
 
@@ -20,10 +20,10 @@ function render() {
 
   if (!auth.token) {
     document.body.classList.add('animated-gradient');
-    loginPage({ main, auth, resolve: render });
+    LoginPage({ main, auth, resolve: render });
   } else {
     document.body.classList.remove('animated-gradient');
-    editPage({ main, auth, backHandler });
+    EditPage({ main, auth, backHandler });
   }
 
   document.body.append(main);
