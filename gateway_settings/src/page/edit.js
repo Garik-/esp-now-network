@@ -83,9 +83,6 @@ export default function ({ main, auth, backHandler }) {
   toast.className = 'snackbar';
   toast.id = 'toast';
 
-  const reset = document.createElement('button')
-  reset.textContent='Reset to Factory Settings';
-
-  main.append(Form({ initPromise, id: FORM_ID, setValue }), reset);
+  main.append(Form({ initPromise, id: FORM_ID, setValue }));
   document.body.append(toast);
 }
