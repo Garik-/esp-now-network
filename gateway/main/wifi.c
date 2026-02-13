@@ -103,7 +103,8 @@ esp_err_t wifi_start(closer_handle_t closer, __attribute__((unused)) void *arg) 
 
     DEFER(esp_wifi_start(), closer, esp_wifi_stop);
 
-    ESP_RETURN_ON_ERROR(esp_wifi_set_channel(GATEWAY_WIFI_CHANEL, WIFI_SECOND_CHAN_NONE), TAG, "esp_wifi_set_channel");
+    ESP_RETURN_ON_ERROR(esp_wifi_set_channel(settings_wifi_channel(), WIFI_SECOND_CHAN_NONE), TAG,
+                        "esp_wifi_set_channel");
     ESP_RETURN_ON_ERROR(esp_wifi_connect(), TAG, "esp_wifi_connect");
 
     return wifi_wait_ip(pdMS_TO_TICKS(WAIT_STA_GOT_IP_MAX_MS));

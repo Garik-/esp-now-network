@@ -1,11 +1,14 @@
 #pragma once
 
+#include <stdint.h>
+
 #include "esp_err.h"
 
 // Runtime configuration stored in NVS (namespace: "cfg").
 typedef struct {
     char wifi_ssid[33];
     char wifi_password[65];
+    uint8_t wifi_channel;
     char mqtt_uri[129];
     char mqtt_user[65];
     char mqtt_password[65];
@@ -16,6 +19,7 @@ const settings_t *settings_get(void);
 
 const char *settings_wifi_ssid(void);
 const char *settings_wifi_password(void);
+uint8_t settings_wifi_channel(void);
 const char *settings_mqtt_uri(void);
 const char *settings_mqtt_user(void);
 const char *settings_mqtt_password(void);

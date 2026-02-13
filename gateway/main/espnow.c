@@ -8,6 +8,7 @@
 
 #include "config.h"
 #include "espnow.h"
+#include "settings.h"
 
 #define QUEUE_SIZE 6     // Max pending ESP-NOW packets before drop.
 #define MAXDELAY_MS 512  // Max queue wait/send time to avoid blocking callbacks.
@@ -92,7 +93,7 @@ static esp_err_t espnow_init(espnow_rx_handler_t handle_fn) {
     ESP_RETURN_ON_ERROR(esp_now_register_recv_cb(espnow_recv_cb), TAG, "esp_now_register_recv_cb");
 
     const esp_now_peer_info_t peer = {
-        .channel = GATEWAY_WIFI_CHANEL,
+        .channel = settings_wifi_channel(),
         .ifidx = GATEWAY_WIFI_IF,
         .encrypt = false,
         .peer_addr = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF},
