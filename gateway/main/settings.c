@@ -44,6 +44,8 @@ static setting_entry_t s_entries[] = {
     SETTING_ENTRY_STR("wifi.ssid", s_settings.wifi_ssid),
     SETTING_ENTRY_STR("wifi.password", s_settings.wifi_password),
     SETTING_ENTRY_U8("wifi.channel", &s_settings.wifi_channel),
+    SETTING_ENTRY_STR("http.auth.user", s_settings.http_auth_user),
+    SETTING_ENTRY_STR("http.auth.password", s_settings.http_auth_password),
     SETTING_ENTRY_STR("mqtt.uri", s_settings.mqtt_uri),
     SETTING_ENTRY_STR("mqtt.user", s_settings.mqtt_user),
     SETTING_ENTRY_STR("mqtt.password", s_settings.mqtt_password),
@@ -68,6 +70,8 @@ static void settings_apply_defaults(settings_t *out) {
     strlcpy(out->wifi_ssid, GATEWAY_WIFI_SSID, sizeof(out->wifi_ssid));
     strlcpy(out->wifi_password, GATEWAY_WIFI_PASSWORD, sizeof(out->wifi_password));
     out->wifi_channel = (uint8_t)GATEWAY_WIFI_CHANNEL_DEFAULT;
+    strlcpy(out->http_auth_user, GATEWAY_HTTP_AUTH_USER, sizeof(out->http_auth_user));
+    strlcpy(out->http_auth_password, GATEWAY_HTTP_AUTH_PASSWORD, sizeof(out->http_auth_password));
     strlcpy(out->mqtt_uri, GATEWAY_BROKER_URL, sizeof(out->mqtt_uri));
     strlcpy(out->mqtt_user, GATEWAY_BROKER_USERNAME, sizeof(out->mqtt_user));
     strlcpy(out->mqtt_password, GATEWAY_BROKER_PASSWORD, sizeof(out->mqtt_password));
@@ -295,6 +299,14 @@ const char *settings_wifi_password(void) {
 
 uint8_t settings_wifi_channel(void) {
     return settings_get()->wifi_channel;
+}
+
+const char *settings_http_auth_user(void) {
+    return settings_get()->http_auth_user;
+}
+
+const char *settings_http_auth_password(void) {
+    return settings_get()->http_auth_password;
 }
 
 const char *settings_mqtt_uri(void) {

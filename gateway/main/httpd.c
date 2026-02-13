@@ -162,7 +162,7 @@ esp_err_t httpd_start_server(void) {
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
     config.server_port = GATEWAY_HTTP_PORT;
 
-    ESP_RETURN_ON_ERROR(build_expected_auth_hdr(GATEWAY_HTTP_AUTH_USER, GATEWAY_HTTP_AUTH_PASSWORD), TAG,
+    ESP_RETURN_ON_ERROR(build_expected_auth_hdr(settings_http_auth_user(), settings_http_auth_password()), TAG,
                         "build_expected_auth_hdr");
 
     httpd_handle_t server = NULL;
@@ -201,6 +201,6 @@ esp_err_t httpd_start_server(void) {
     ESP_RETURN_ON_ERROR(httpd_register_uri_handler(server, &settings_csv_post), TAG, "httpd_register_uri_handler");
 
     ESP_LOGI(TAG, "HTTP server started, port=%d auth.user=%s auth.password=%s", config.server_port,
-             GATEWAY_HTTP_AUTH_USER, GATEWAY_HTTP_AUTH_PASSWORD);
+             settings_http_auth_user(), settings_http_auth_password());
     return ESP_OK;
 }
