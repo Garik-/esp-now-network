@@ -1,7 +1,7 @@
 #include "settings.h"
 
-#include <stdio.h>
 #include <stdbool.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -33,15 +33,9 @@ typedef struct {
     size_t str_buf_len;
 } setting_entry_t;
 
-#define SETTING_ENTRY_STR(k, b) \
-    {                            \
-        .key = (k), .type = SETTING_TYPE_STR, .value.str = (b), .str_buf_len = sizeof(b) \
-    }
+#define SETTING_ENTRY_STR(k, b) {.key = (k), .type = SETTING_TYPE_STR, .value.str = (b), .str_buf_len = sizeof(b)}
 
-#define SETTING_ENTRY_U8(k, b) \
-    {                           \
-        .key = (k), .type = SETTING_TYPE_U8, .value.u8 = (b), .str_buf_len = 0 \
-    }
+#define SETTING_ENTRY_U8(k, b) {.key = (k), .type = SETTING_TYPE_U8, .value.u8 = (b), .str_buf_len = 0}
 
 static settings_t s_settings;
 static bool s_settings_loaded = false;
@@ -107,14 +101,14 @@ static esp_err_t settings_entry_to_string(const setting_entry_t *entry, char *ou
 
     int n = 0;
     switch (entry->type) {
-        case SETTING_TYPE_STR:
-            n = snprintf(out, out_len, "%s", entry->value.str);
-            break;
-        case SETTING_TYPE_U8:
-            n = snprintf(out, out_len, "%u", *entry->value.u8);
-            break;
-        default:
-            return ESP_ERR_INVALID_STATE;
+    case SETTING_TYPE_STR:
+        n = snprintf(out, out_len, "%s", entry->value.str);
+        break;
+    case SETTING_TYPE_U8:
+        n = snprintf(out, out_len, "%u", *entry->value.u8);
+        break;
+    default:
+        return ESP_ERR_INVALID_STATE;
     }
 
     if (n < 0) {
@@ -241,17 +235,17 @@ static esp_err_t settings_load_from_nvs(void) {
     for (size_t i = 0; i < sizeof(s_entries) / sizeof(s_entries[0]); i++) {
         setting_entry_t *entry = &s_entries[i];
         switch (entry->type) {
-            case SETTING_TYPE_STR: {
-                size_t len = entry->str_buf_len;
-                err = nvs_get_str(nvs, entry->key, entry->value.str, &len);
-                break;
-            }
-            case SETTING_TYPE_U8:
-                err = nvs_get_u8(nvs, entry->key, entry->value.u8);
-                break;
-            default:
-                nvs_close(nvs);
-                return ESP_ERR_INVALID_STATE;
+        case SETTING_TYPE_STR: {
+            size_t len = entry->str_buf_len;
+            err = nvs_get_str(nvs, entry->key, entry->value.str, &len);
+            break;
+        }
+        case SETTING_TYPE_U8:
+            err = nvs_get_u8(nvs, entry->key, entry->value.u8);
+            break;
+        default:
+            nvs_close(nvs);
+            return ESP_ERR_INVALID_STATE;
         }
 
         if (err == ESP_ERR_NVS_NOT_FOUND) {
@@ -350,41 +344,41 @@ esp_err_t settings_set(const char *key, const char *value) {
     nvs_handle_t nvs = 0;
     ESP_RETURN_ON_ERROR(nvs_open(SETTINGS_NAMESPACE, NVS_READWRITE, &nvs), TAG, "nvs_open");
 
-    esp_err_t err = ESP_OK;
+    esp_err_t ret = ESP_OK;
     switch (entry->type) {
-        case SETTING_TYPE_STR:
-            if (strlen(value) >= entry->str_buf_len) {
-                err = ESP_ERR_INVALID_SIZE;
-                goto out;
-            }
-
-            err = nvs_set_str(nvs, key, value);
-            if (err == ESP_OK) {
-                strlcpy(entry->value.str, value, entry->str_buf_len);
-            }
-            break;
-        case SETTING_TYPE_U8: {
-            uint8_t parsed = 0;
-            ESP_GOTO_ON_ERROR(settings_parse_u8(value, &parsed), err, out, TAG, "invalid %s", key);
-
-            err = nvs_set_u8(nvs, key, parsed);
-            if (err == ESP_OK) {
-                *entry->value.u8 = parsed;
-            }
-            break;
-        }
-        default:
-            err = ESP_ERR_INVALID_STATE;
+    case SETTING_TYPE_STR:
+        if (strlen(value) >= entry->str_buf_len) {
+            ret = ESP_ERR_INVALID_SIZE;
             goto out;
+        }
+
+        ret = nvs_set_str(nvs, key, value);
+        if (ret == ESP_OK) {
+            strlcpy(entry->value.str, value, entry->str_buf_len);
+        }
+        break;
+    case SETTING_TYPE_U8: {
+        uint8_t parsed = 0;
+        ESP_GOTO_ON_ERROR(settings_parse_u8(value, &parsed), out, TAG, "invalid key");
+
+        ret = nvs_set_u8(nvs, key, parsed);
+        if (ret == ESP_OK) {
+            *entry->value.u8 = parsed;
+        }
+        break;
+    }
+    default:
+        ret = ESP_ERR_INVALID_STATE;
+        goto out;
     }
 
-    if (err == ESP_OK) {
-        err = nvs_commit(nvs);
+    if (ret == ESP_OK) {
+        ret = nvs_commit(nvs);
     }
 
 out:
     nvs_close(nvs);
-    return err;
+    return ret;
 }
 
 esp_err_t settings_clear(const char *key) {
