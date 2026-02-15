@@ -35,6 +35,13 @@ typedef esp_err_t (*closer_fn_t)(void);
  */
 typedef struct closer_t *closer_handle_t;
 
+/**
+ * @brief Function type executed inside @ref with_closer helper.
+ *
+ * @param closer Closer handle for registering cleanup callbacks.
+ * @param arg User argument passed through from caller.
+ * @return ESP_OK on success, or an error code on failure.
+ */
 typedef esp_err_t (*with_closer_fn_t)(closer_handle_t, void *arg);
 
 /**
@@ -77,6 +84,16 @@ esp_err_t closer_add(closer_handle_t h, closer_fn_t fn, const char *what);
  */
 void closer_close(closer_handle_t h);
 
+/**
+ * @brief Runs function with temporary closer context.
+ *
+ * Creates a closer, calls @p fn, executes registered cleanups when @p fn
+ * fails, then destroys closer object.
+ *
+ * @param fn Function to execute.
+ * @param arg User argument forwarded to @p fn.
+ * @return Return value from @p fn or closer initialization error.
+ */
 esp_err_t with_closer(with_closer_fn_t fn, void *arg);
 
 #define DEFER(call, closer, cleanup_fn)                                                                                \

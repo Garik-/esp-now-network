@@ -70,11 +70,14 @@ static esp_err_t handle(const espnow_rx_t *rx) {
 
     int msg_id = esp_mqtt_client_publish(s_client, topic, (const char *)rx->data, rx->len, GATEWAY_BROKER_QOS,
                                          GATEWAY_BROKER_RETAIN);
+
+    ESP_LOGI(TAG, "mqtt publish, topic=%s len=%u msg_id=%d", topic, (unsigned)rx->len, msg_id);
+
     if (msg_id < 0) {
-        ESP_LOGW(TAG, "mqtt publish failed, topic=%s len=%u msg_id=%d", topic, (unsigned)rx->len, msg_id);
         return ESP_FAIL;
     }
 
+#ifdef GATEWAY_ENABLE_SSE_LOGS
     char line[256];
     int n = snprintf(line, sizeof(line), "data:%s,%u,%d\n\n", topic, (unsigned)rx->len, msg_id);
     if (n < 0 || (size_t)n >= sizeof(line)) {
@@ -83,6 +86,9 @@ static esp_err_t handle(const espnow_rx_t *rx) {
     }
 
     return logs_push(line, (size_t)n);
+#endif
+
+    return ESP_OK;
 }
 
 static esp_err_t app_run(void) {

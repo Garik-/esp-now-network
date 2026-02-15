@@ -160,6 +160,7 @@ static esp_err_t handle_settings_csv_post(httpd_req_t *req) {
     return httpd_resp_send(req, NULL, 0);
 }
 
+#ifdef GATEWAY_ENABLE_SSE_LOGS
 static esp_err_t logs_handler(httpd_req_t *req) {
     RingbufHandle_t log_rb;
     esp_err_t err;
@@ -198,6 +199,7 @@ static esp_err_t logs_handler(httpd_req_t *req) {
 
     return ESP_OK;
 }
+#endif
 
 esp_err_t httpd_start_server(void) {
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
@@ -241,8 +243,10 @@ esp_err_t httpd_start_server(void) {
     };
     ESP_RETURN_ON_ERROR(httpd_register_uri_handler(server, &settings_csv_post), TAG, "httpd_register_uri_handler");
 
+#ifdef GATEWAY_ENABLE_SSE_LOGS
     const httpd_uri_t sse = {.uri = "/logs", .method = HTTP_GET, .handler = logs_handler, .user_ctx = NULL};
     ESP_RETURN_ON_ERROR(httpd_register_uri_handler(server, &sse), TAG, "httpd_register_uri_handler");
+#endif
 
     ESP_LOGI(TAG, "HTTP server started, port=%d auth.user=%s auth.password=%s", config.server_port,
              settings_http_auth_user(), settings_http_auth_password());

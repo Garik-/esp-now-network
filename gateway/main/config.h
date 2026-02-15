@@ -1,4 +1,9 @@
-#pragma once
+#ifndef _CONFIG_H_
+#define _CONFIG_H_
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #define GATEWAY_WIFI_MODE WIFI_MODE_APSTA
 #define GATEWAY_WIFI_IF ESP_IF_WIFI_AP
@@ -17,3 +22,9 @@
 #define GATEWAY_BROKER_PASSWORD CONFIG_ESPNOW_BROKER_PASSWORD
 #define GATEWAY_BROKER_QOS 0
 #define GATEWAY_BROKER_RETAIN 0
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif /* _CONFIG_H_ */
