@@ -1,4 +1,6 @@
 menu "ESP-NOW Gateway Configuration"
+
+
     config ESPNOW_WIFI_SSID
         string "WiFi SSID"
         default "myssid"
@@ -39,6 +41,12 @@ menu "ESP-NOW Gateway Configuration"
         help
             Password for Basic Auth on HTTP POST config endpoints.
             Leave blank to disable Basic Auth.
+
+    config GATEWAY_ENABLE_SSE_LOGS
+        bool "Enable SSE logs endpoint (/logs)"
+        default n
+        help
+            Enables in-memory log ring buffer and /logs SSE endpoint.
 
 	config ESPNOW_MDNS_NAME
 		string "mDNS Name"

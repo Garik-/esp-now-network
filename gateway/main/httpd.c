@@ -10,7 +10,9 @@
 #include "mbedtls/base64.h"
 
 #include "config.h"
+#if CONFIG_GATEWAY_ENABLE_SSE_LOGS
 #include "logs.h"
+#endif
 #include "settings.h"
 
 static const char *const TAG = "httpd";
@@ -160,7 +162,7 @@ static esp_err_t handle_settings_csv_post(httpd_req_t *req) {
     return httpd_resp_send(req, NULL, 0);
 }
 
-#ifdef GATEWAY_ENABLE_SSE_LOGS
+#if CONFIG_GATEWAY_ENABLE_SSE_LOGS
 static esp_err_t logs_handler(httpd_req_t *req) {
     RingbufHandle_t log_rb;
     esp_err_t err;
@@ -243,7 +245,7 @@ esp_err_t httpd_start_server(void) {
     };
     ESP_RETURN_ON_ERROR(httpd_register_uri_handler(server, &settings_csv_post), TAG, "httpd_register_uri_handler");
 
-#ifdef GATEWAY_ENABLE_SSE_LOGS
+#if CONFIG_GATEWAY_ENABLE_SSE_LOGS
     const httpd_uri_t sse = {.uri = "/logs", .method = HTTP_GET, .handler = logs_handler, .user_ctx = NULL};
     ESP_RETURN_ON_ERROR(httpd_register_uri_handler(server, &sse), TAG, "httpd_register_uri_handler");
 #endif
