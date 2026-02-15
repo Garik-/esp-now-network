@@ -18,44 +18,44 @@ export const menuConfig = Object.freeze({
           default: 'mypassword',
           help: 'WiFi password (WPA or WPA2) for the device to use. Can be left blank if the network has no security set',
         },
-        /*{
+        {
           key: 'wifi.channel',
           title: 'Channel',
           type: 'number',
           default: 6,
           range: [0, 14],
-          help: 'The channel on which sending and receiving ESPNOW data',
-        },*/
+          help: 'The channel on which sending and receiving ESP-NOW data',
+        },
       ],
     },
-    /*{
+    {
       legend: 'HTTP',
       items: [
-        {
+        /*{
           key: 'http.port',
           title: 'Server Port',
           type: 'number',
           default: 80,
           range: [1, 65535],
           help: 'Port number for the HTTP server',
-        },
+        },*/
 
         {
           key: 'http.auth.user',
           title: 'Username',
           type: 'text',
-          default: '',
-          help: 'Username for Basic Auth on HTTP POST config endpoints. Leave blank to disable Basic Auth',
+          default: 'admin',
+          help: 'Username for Basic Auth',
         },
         {
           key: 'http.auth.password',
           title: 'Password',
           type: 'password',
-          default: '',
-          help: 'Password for Basic Auth on HTTP POST config endpoints. Leave blank to disable Basic Auth',
+          default: 'admin',
+          help: 'Password for Basic Auth',
         },
       ],
-    },*/
+    },
     {
       legend: 'MQTT',
       items: [

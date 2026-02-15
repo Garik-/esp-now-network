@@ -25,7 +25,7 @@ static inline esp_err_t check_err(esp_err_t err, const char *what) {
 
 static QueueHandle_t s_event_queue = NULL;
 
-static esp_err_t espnow_deinit() {
+static esp_err_t espnow_deinit(void) {
     espnow_rx_t rx = {0}; // sentinel for task exit
     xQueueSend(s_event_queue, &rx, pdMS_TO_TICKS(MAXDELAY_MS));
 
@@ -75,7 +75,7 @@ static void espnow_task(void *handle_fn) {
             break;
         }
 
-        ((espnow_rx_handler_t)handle_fn)(&rx);
+        (void)((espnow_rx_handler_t)handle_fn)(&rx);
     }
 
     vTaskDelete(NULL);

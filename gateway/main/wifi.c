@@ -59,7 +59,7 @@ static esp_err_t wifi_wait_ip(TickType_t xTicksToWait) {
     return ESP_OK;
 }
 
-static esp_err_t wifi_register_handlers() {
+static esp_err_t wifi_register_handlers(void) {
     ESP_RETURN_ON_ERROR(esp_event_handler_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &wifi_event_handler, NULL), TAG,
                         "esp_event_handler_register");
 

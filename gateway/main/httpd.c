@@ -10,6 +10,7 @@
 #include "mbedtls/base64.h"
 
 #include "config.h"
+#include "logs.h"
 #include "settings.h"
 
 static const char *const TAG = "httpd";
@@ -28,7 +29,8 @@ static esp_err_t build_expected_auth_hdr(const char *user, const char *password)
     }
 
     char plain[AUTH_PLAIN_MAX_LEN];
-    if (snprintf(plain, sizeof(plain), "%s:%s", user, password) <= 0) {
+    int n = snprintf(plain, sizeof(plain), "%s:%s", user, password);
+    if (n <= 0 || (size_t)n >= sizeof(plain)) {
         ESP_LOGE(TAG, "Failed to format auth credentials");
         return ESP_FAIL;
     }
@@ -158,6 +160,45 @@ static esp_err_t handle_settings_csv_post(httpd_req_t *req) {
     return httpd_resp_send(req, NULL, 0);
 }
 
+static esp_err_t logs_handler(httpd_req_t *req) {
+    RingbufHandle_t log_rb;
+    esp_err_t err;
+
+    err = logs_init(&log_rb);
+    if (unlikely(err != ESP_OK)) {
+        ESP_LOGE(TAG, "logs_init failed: %s", esp_err_to_name(err));
+        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "logs_init failed");
+        return ESP_FAIL;
+    }
+
+    httpd_resp_set_type(req, "text/event-stream");
+    httpd_resp_set_hdr(req, "Cache-Control", "no-cache");
+    httpd_resp_set_hdr(req, "Connection", "keep-alive");
+
+    size_t size;
+
+    while (1) {
+        char *data = (char *)xRingbufferReceive(log_rb, &size, pdMS_TO_TICKS(5000));
+
+        if (data) {
+            err = httpd_resp_send_chunk(req, data, size);
+            vRingbufferReturnItem(log_rb, data);
+        } else {
+            err = httpd_resp_send_chunk(req, ": ping\n\n", HTTPD_RESP_USE_STRLEN);
+        }
+
+        if (unlikely(err != ESP_OK)) {
+            ESP_LOGE(TAG, "Failed to send sse ping (returned %02X)", err);
+            break;
+        }
+    }
+
+    httpd_resp_send_chunk(req, NULL, 0); // End response
+    logs_deinit();
+
+    return ESP_OK;
+}
+
 esp_err_t httpd_start_server(void) {
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
     config.server_port = GATEWAY_HTTP_PORT;
@@ -199,6 +240,9 @@ esp_err_t httpd_start_server(void) {
         .user_ctx = NULL,
     };
     ESP_RETURN_ON_ERROR(httpd_register_uri_handler(server, &settings_csv_post), TAG, "httpd_register_uri_handler");
+
+    const httpd_uri_t sse = {.uri = "/logs", .method = HTTP_GET, .handler = logs_handler, .user_ctx = NULL};
+    ESP_RETURN_ON_ERROR(httpd_register_uri_handler(server, &sse), TAG, "httpd_register_uri_handler");
 
     ESP_LOGI(TAG, "HTTP server started, port=%d auth.user=%s auth.password=%s", config.server_port,
              settings_http_auth_user(), settings_http_auth_password());
